@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ClipShow
+Comment=Automatic highlight reel generator from video clips
+Exec=clipshow-wrapper
+Icon=com.clipshow.app
+Terminal=false
+Categories=AudioVideo;Video;
+MimeType=video/mp4;video/quicktime;video/x-matroska;video/webm;

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.clipshow.app</id>
+  <name>ClipShow</name>
+  <summary>Automatic highlight reel generator from video clips</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      ClipShow turns raw video clips into a highlight reel automatically.
+      It detects interesting moments using scene changes, audio peaks, motion,
+      and optional AI-powered content analysis, then stitches them together.
+    </p>
+    <p>
+      Features include adjustable detection weights, custom semantic text prompts
+      for CLIP-based content scoring, face/emotion detection, a four-step GUI
+      workflow (Import, Analyze, Review, Export), and a headless CLI mode for
+      batch processing.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">com.clipshow.app.desktop</launchable>
+
+  <url type="homepage">https://github.com/your-org/clipshow</url>
+  <url type="bugtracker">https://github.com/your-org/clipshow/issues</url>
+
+  <provides>
+    <binary>clipshow-wrapper</binary>
+  </provides>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-02-23">
+      <description>
+        <p>Initial release with scene, audio, motion, semantic, and emotion detectors.</p>
+      </description>
+    </release>
+  </releases>
+</component>
