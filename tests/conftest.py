@@ -119,10 +119,12 @@ def loud_moment_video(tmp_video_dir):
         return frame
 
     def make_audio(t):
-        # t is an array of time values
+        # t can be a scalar (float/int) or array of time values
+        t = np.atleast_1d(np.asarray(t, dtype=float))
+        rng = np.random.default_rng(42)
         audio = np.where(
             (t >= 1.0) & (t < 1.5),
-            np.random.default_rng(42).standard_normal(t.shape) * 0.8,
+            rng.standard_normal(t.shape) * 0.8,
             np.zeros_like(t) + 0.001,  # Near-silence
         )
         # Return as (N, 1) for mono
