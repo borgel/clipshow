@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clipshow"
+version = "0.1.0"
+description = "Automatic highlight reel generator from video clips"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "ClipShow Contributors" }]
+
+dependencies = [
+    "PySide6>=6.6",
+    "moviepy>=2.0",
+    "scenedetect[opencv]>=0.6.2",
+    "librosa>=0.10",
+    "opencv-python-headless>=4.8",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+semantic = [
+    "onnx_clip",
+    "onnxruntime",
+]
+emotion = [
+    "mediapipe",
+    "deepface",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-qt>=4.2",
+    "pytest-cov>=4.0",
+    "scikit-image>=0.21",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+clipshow = "clipshow.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["clipshow*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"

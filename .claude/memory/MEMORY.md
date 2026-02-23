@@ -29,6 +29,7 @@
 
 ## User Preferences
 
+- **Use `uv` for all Python commands** — always `uv run pytest`, `uv run ruff`, etc. Never `source .venv/bin/activate`
 - Use `bd` (beads) to track ALL work — always check before starting, always update
 - Modular git commits in feature branches
 - Run `testreview-gemini` after writing tests for each module
