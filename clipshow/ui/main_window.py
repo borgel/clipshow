@@ -11,19 +11,30 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from clipshow.config import Settings
+from clipshow.model.moments import HighlightSegment
 from clipshow.model.project import Project
+from clipshow.ui.analyze_panel import AnalyzePanel
+from clipshow.ui.export_panel import ExportPanel
 from clipshow.ui.import_panel import ImportPanel
+from clipshow.ui.review_panel import ReviewPanel
 
 
 class MainWindow(QMainWindow):
     """ClipShow main window with Import → Analyze → Review → Export tabs."""
 
-    def __init__(self, project: Project | None = None, parent: QWidget | None = None):
+    def __init__(
+        self,
+        project: Project | None = None,
+        settings: Settings | None = None,
+        parent: QWidget | None = None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("ClipShow")
         self.setMinimumSize(800, 600)
 
         self.project = project or Project()
+        self.settings = settings or Settings()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -35,9 +46,9 @@ class MainWindow(QMainWindow):
 
         # Create panels
         self.import_panel = ImportPanel(self.project)
-        self.analyze_panel = QWidget()
-        self.review_panel = QWidget()
-        self.export_panel = QWidget()
+        self.analyze_panel = AnalyzePanel(self.project, self.settings)
+        self.review_panel = ReviewPanel()
+        self.export_panel = ExportPanel(self.project.export_settings)
 
         self.tabs.addTab(self.import_panel, "1. Import")
         self.tabs.addTab(self.analyze_panel, "2. Analyze")
@@ -65,6 +76,8 @@ class MainWindow(QMainWindow):
         self.next_button.clicked.connect(self._go_next)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.import_panel.files_changed.connect(self._on_files_changed)
+        self.analyze_panel.analysis_complete.connect(self._on_analysis_complete)
+        self.review_panel.segments_modified.connect(self._on_segments_modified)
 
     def _go_back(self) -> None:
         current = self.tabs.currentIndex()
@@ -92,3 +105,15 @@ class MainWindow(QMainWindow):
         """Update Next button state when files are added/removed on import tab."""
         if self.tabs.currentIndex() == 0:
             self.next_button.setEnabled(self.import_panel.file_count > 0)
+
+    def _on_analysis_complete(self, moments: list) -> None:
+        """Convert detected moments to highlight segments and pass to review."""
+        segments = [
+            HighlightSegment.from_moment(m, order=i) for i, m in enumerate(moments)
+        ]
+        self.review_panel.set_segments(segments)
+        self.export_panel.set_segments(segments)
+
+    def _on_segments_modified(self) -> None:
+        """Sync segment changes from review to export panel."""
+        self.export_panel.set_segments(self.review_panel.segments)
