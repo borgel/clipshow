@@ -10,6 +10,15 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-baselines",
+        action="store_true",
+        default=False,
+        help="Regenerate visual regression baseline images.",
+    )
+
+
 @pytest.fixture(scope="session")
 def tmp_video_dir():
     """Session-scoped temp directory for synthetic test videos."""
