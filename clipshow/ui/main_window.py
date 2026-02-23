@@ -18,6 +18,7 @@ from clipshow.ui.analyze_panel import AnalyzePanel
 from clipshow.ui.export_panel import ExportPanel
 from clipshow.ui.import_panel import ImportPanel
 from clipshow.ui.review_panel import ReviewPanel
+from clipshow.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
@@ -71,6 +72,12 @@ class MainWindow(QMainWindow):
         nav_layout.addWidget(self.next_button)
         layout.addLayout(nav_layout)
 
+        # Menu bar
+        menu_bar = self.menuBar()
+        edit_menu = menu_bar.addMenu("Edit")
+        self.preferences_action = edit_menu.addAction("Preferences…")
+        self.preferences_action.triggered.connect(self._open_preferences)
+
         # Connect signals
         self.back_button.clicked.connect(self._go_back)
         self.next_button.clicked.connect(self._go_next)
@@ -117,3 +124,9 @@ class MainWindow(QMainWindow):
     def _on_segments_modified(self) -> None:
         """Sync segment changes from review to export panel."""
         self.export_panel.set_segments(self.review_panel.segments)
+
+    def _open_preferences(self) -> None:
+        """Open the settings dialog and sync changes on save."""
+        dlg = SettingsDialog(self.settings, parent=self)
+        if dlg.exec() == SettingsDialog.DialogCode.Accepted:
+            self.analyze_panel._load_settings()

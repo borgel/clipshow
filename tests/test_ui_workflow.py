@@ -147,3 +147,10 @@ class TestFullWorkflow:
         assert len(window.project.sources) == 1
         assert window.project is window.import_panel.project
         assert window.project is window.analyze_panel.project
+
+
+class TestMenuBar:
+    def test_preferences_action_exists(self, window):
+        """Edit > Preferences menu action should exist."""
+        assert window.preferences_action is not None
+        assert "Preferences" in window.preferences_action.text()
