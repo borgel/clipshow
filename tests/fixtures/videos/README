@@ -1,0 +1,2 @@
+Place real video files here for end-to-end testing.
+All video files (*.mp4, *.mov, *.mkv, *.avi, *.webm) are gitignored.

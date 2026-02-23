@@ -24,6 +24,11 @@ Thumbs.db
 
 # Test artifacts
 tests/baselines/*_diff.png
+tests/fixtures/videos/*.mp4
+tests/fixtures/videos/*.mov
+tests/fixtures/videos/*.mkv
+tests/fixtures/videos/*.avi
+tests/fixtures/videos/*.webm
 .coverage
 htmlcov/
 .pytest_cache/
