@@ -468,3 +468,63 @@ test = [
     "scikit-image>=0.21",  # SSIM for visual regression
 ]
 ```
+
+---
+
+## Post-v0.1 Features (Steps 21-24)
+
+All 20 original build steps are complete. The following features extend ClipShow:
+
+### Step 21: Semantic Prompts + Pipeline Bug Fix (`clipshow-er5`)
+
+**Bug Fix**: `pipeline.py:61` instantiated `SemanticDetector()` without passing `settings.semantic_prompts`. Fixed to pass `prompts=self.settings.semantic_prompts`.
+
+**New Widget**: `clipshow/ui/prompt_editor.py` — Reusable `PromptEditor` with `QListWidget` (double-click to inline-edit), add/remove/reset buttons, duplicate/empty rejection, `prompts_changed(list)` signal.
+
+**AnalyzePanel Update**: Two new detector rows (Semantic with "Edit Prompts..." button, Emotion) added after Motion, following the same checkbox+slider+label pattern. Prompts dialog uses `PromptEditor` embedded in a `QDialog`.
+
+**Tests**: `tests/test_prompt_editor.py` (widget behavior), updates to `tests/test_pipeline.py` (custom prompts passed), updates to `tests/test_ui_analyze.py` (new slider rows).
+
+### Step 22: Settings Dialog (`clipshow-21q`)
+
+**New**: `clipshow/ui/settings_dialog.py` — Modal `QDialog` with grouped sections:
+- Detector Weights (5x checkbox+slider)
+- Semantic Prompts (embedded `PromptEditor`)
+- Segment Selection (threshold slider, padding/duration spinboxes)
+- Output Settings (codec combo, FPS spinbox, bitrate line edit)
+- Save/Cancel/Reset buttons with snapshot-based cancel
+
+**MainWindow Update**: `Edit > Preferences...` menu action opens the dialog. On save, syncs `analyze_panel._load_settings()`.
+
+**Tests**: `tests/test_settings_dialog.py`, updates to `tests/test_ui_workflow.py`.
+
+### Step 23: README (`clipshow-lns`)
+
+User-facing `README.md` written for novices: elevator pitch, how detection works, prerequisites (Python 3.11+, FFmpeg), installation (`pip install -e .`, optional deps), usage (GUI walkthrough, auto mode, headless, CLI flags), customization (weights, thresholds, prompts), development setup, MIT license.
+
+### Step 24: Linux Flatpak Packaging (`clipshow-1xe`)
+
+**New files** in `packaging/`:
+- `com.clipshow.app.yml` — Flatpak manifest using `org.kde.Platform//6.7`
+- `com.clipshow.app.desktop` — XDG desktop entry
+- `com.clipshow.app.metainfo.xml` — AppStream metadata
+
+**Release workflow update**: New `build-linux` job in `.github/workflows/release.yml` — installs flatpak-builder, builds and bundles `.flatpak`, uploads as release artifact.
+
+### Updated Project Structure (additions)
+
+```
+clipshow/
+├── README.md                          # Step 23
+├── clipshow/
+│   └── ui/
+│       ├── prompt_editor.py           # Step 21
+│       └── settings_dialog.py         # Step 22
+├── packaging/
+│   ├── com.clipshow.app.yml           # Step 24
+│   ├── com.clipshow.app.desktop       # Step 24
+│   └── com.clipshow.app.metainfo.xml  # Step 24
+└── tests/
+    ├── test_prompt_editor.py          # Step 21
+    └── test_settings_dialog.py        # Step 22
+```
