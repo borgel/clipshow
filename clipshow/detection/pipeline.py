@@ -23,6 +23,23 @@ DETECTOR_CLASSES: dict[str, type[Detector]] = {
 }
 
 
+def _get_optional_detector(name: str) -> type[Detector] | None:
+    """Lazy-load optional detectors (semantic, emotion) on demand."""
+    if name == "semantic":
+        try:
+            from clipshow.detection.semantic import SemanticDetector
+            return SemanticDetector
+        except ImportError:
+            return None
+    elif name == "emotion":
+        try:
+            from clipshow.detection.emotion import EmotionDetector
+            return EmotionDetector
+        except ImportError:
+            return None
+    return None
+
+
 class DetectionPipeline:
     """Orchestrates running detectors and extracting highlight moments."""
 
@@ -33,8 +50,15 @@ class DetectionPipeline:
         """Return (name, detector_instance, weight) for enabled detectors."""
         result = []
         for name, weight in self.settings.detector_weights.items():
-            if weight > 0 and name in DETECTOR_CLASSES:
+            if weight <= 0:
+                continue
+            if name in DETECTOR_CLASSES:
                 result.append((name, DETECTOR_CLASSES[name](), weight))
+            else:
+                # Try lazy-loaded optional detectors
+                cls = _get_optional_detector(name)
+                if cls is not None:
+                    result.append((name, cls(), weight))
         return result
 
     def analyze_video(
@@ -72,11 +96,15 @@ class DetectionPipeline:
                     overall = (i + p) / len(detectors)
                     progress_callback(overall)
 
-            result = detector.detect(
-                video_path,
-                progress_callback=per_detector_progress,
-                cancel_flag=cancel_flag,
-            )
+            try:
+                result = detector.detect(
+                    video_path,
+                    progress_callback=per_detector_progress,
+                    cancel_flag=cancel_flag,
+                )
+            except RuntimeError:
+                # Optional detector failed to load (missing dependency) — skip
+                continue
 
             if len(result.scores) > 0:
                 results.append(result)
