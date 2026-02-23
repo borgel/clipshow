@@ -1,5 +1,7 @@
 """QApplication setup and auto-mode runner."""
 
+from __future__ import annotations
+
 import sys
 
 
@@ -28,13 +30,80 @@ def run_auto_mode(
 ) -> int:
     """Run automatic highlight reel generation.
 
+    Loads files, runs ffprobe for metadata, runs the detection pipeline
+    with default settings, takes all segments above threshold sorted
+    chronologically, assembles via MoviePy, and writes output.
+
     Returns 0 on success, 1 on failure.
     """
     if not files:
         print("Error: no input files specified", file=sys.stderr)
         return 1
 
-    # TODO: implement auto mode pipeline in Step 9
-    print(f"Auto mode: {len(files)} files -> {output_path}")
-    print("Auto mode not yet implemented")
-    return 1
+    from clipshow.config import Settings
+    from clipshow.detection.pipeline import DetectionPipeline
+    from clipshow.export.assembler import assemble_highlights
+    from clipshow.export.ffprobe import extract_metadata
+    from clipshow.model.moments import HighlightSegment
+
+    settings = Settings()
+    pipeline = DetectionPipeline(settings)
+
+    # Step 1: Extract metadata
+    sources = []
+    for path in files:
+        try:
+            source = extract_metadata(path)
+            sources.append(source)
+            if not headless:
+                print(f"  Loaded: {path} ({source.duration:.1f}s, {source.width}x{source.height})")
+        except (FileNotFoundError, RuntimeError) as e:
+            print(f"Error: failed to read {path}: {e}", file=sys.stderr)
+            return 1
+
+    # Step 2: Run detection pipeline
+    if not headless:
+        print("Analyzing videos...")
+
+    video_paths = [(s.path, s.duration) for s in sources]
+
+    def on_progress(p: float) -> None:
+        if not headless:
+            print(f"  Progress: {p:.0%}", end="\r")
+
+    moments = pipeline.analyze_all(video_paths, progress_callback=on_progress)
+
+    if not headless:
+        print(f"\n  Found {len(moments)} interesting moments")
+
+    if not moments:
+        print("No interesting moments detected. Try lowering the threshold.", file=sys.stderr)
+        return 1
+
+    # Step 3: Convert to segments, sorted chronologically
+    segments = [
+        HighlightSegment.from_moment(m, order=i) for i, m in enumerate(moments)
+    ]
+    segments.sort(key=lambda s: (s.source_path, s.start_time))
+
+    # Step 4: Assemble output
+    if not headless:
+        total_dur = sum(s.duration for s in segments)
+        print(f"Assembling {len(segments)} segments ({total_dur:.1f}s total)...")
+
+    try:
+        assemble_highlights(
+            segments,
+            output_path=output_path,
+            codec=settings.output_codec,
+            fps=settings.output_fps,
+            bitrate=settings.output_bitrate,
+        )
+    except (ValueError, RuntimeError) as e:
+        print(f"Error: export failed: {e}", file=sys.stderr)
+        return 1
+
+    if not headless:
+        print(f"Done! Output saved to: {output_path}")
+
+    return 0
