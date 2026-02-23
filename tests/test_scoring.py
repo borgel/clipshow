@@ -108,6 +108,12 @@ class TestThresholdSegments:
     def test_empty_input(self):
         assert threshold_segments(np.array([]), 0.5) == []
 
+    def test_exactly_at_threshold(self):
+        """Score exactly equal to threshold should be included (>=)."""
+        scores = np.array([0.0, 0.5, 0.0])
+        segments = threshold_segments(scores, 0.5)
+        assert segments == [(1, 2)]
+
 
 class TestApplyPadding:
     def test_basic_padding(self):
@@ -192,9 +198,9 @@ class TestExtractMoments:
         assert len(moments) == 1
         m = moments[0]
         assert m.source_path == "test.mp4"
-        assert m.start_time == pytest.approx(3.5, abs=0.2)
-        assert m.end_time == pytest.approx(5.5, abs=0.2)
-        assert m.peak_score == pytest.approx(0.9, abs=0.05)
+        assert m.start_time == pytest.approx(3.5, abs=0.11)
+        assert m.end_time == pytest.approx(5.5, abs=0.11)
+        assert m.peak_score == pytest.approx(0.9, abs=0.01)
 
     def test_two_peaks_ranked(self):
         """Two peaks should be returned ranked by peak score descending."""
@@ -248,7 +254,7 @@ class TestExtractMoments:
             video_duration=2.0,
         )
         assert len(moments) >= 1
-        assert moments[0].end_time <= 2.0
+        assert moments[0].end_time == 2.0
 
     def test_short_segments_filtered(self):
         """Segments shorter than min_segment_duration should be discarded."""

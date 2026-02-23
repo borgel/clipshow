@@ -1,5 +1,7 @@
 """Tests for ffprobe metadata extraction."""
 
+from unittest.mock import patch
+
 import pytest
 
 from clipshow.export.ffprobe import extract_metadata, get_video_stream, probe
@@ -21,6 +23,11 @@ class TestProbe:
         bad_file.write_text("this is not a video")
         with pytest.raises(RuntimeError):
             probe(str(bad_file))
+
+    def test_probe_ffprobe_not_found(self, static_video):
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            with pytest.raises(RuntimeError, match="ffprobe not found"):
+                probe(static_video)
 
 
 class TestGetVideoStream:

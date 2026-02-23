@@ -190,8 +190,8 @@ def extract_moments(
     # 6. Build DetectedMoments with peak/mean scores
     moments = []
     for start, end in time_segments:
-        start_idx = max(0, int(start * COMMON_SAMPLE_RATE))
-        end_idx = min(len(scores), int(end * COMMON_SAMPLE_RATE))
+        start_idx = max(0, round(start * COMMON_SAMPLE_RATE))
+        end_idx = min(len(scores), round(end * COMMON_SAMPLE_RATE))
         if end_idx <= start_idx:
             continue
         segment_scores = scores[start_idx:end_idx]
