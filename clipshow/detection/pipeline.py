@@ -58,7 +58,10 @@ class DetectionPipeline:
                 # Try lazy-loaded optional detectors
                 cls = _get_optional_detector(name)
                 if cls is not None:
-                    result.append((name, cls(), weight))
+                    kwargs = {}
+                    if name == "semantic":
+                        kwargs["prompts"] = self.settings.semantic_prompts
+                    result.append((name, cls(**kwargs), weight))
         return result
 
     def analyze_video(

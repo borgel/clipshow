@@ -95,6 +95,45 @@ class TestPipelineWithMocks:
         # Should return empty or partial (cancelled before any detector ran)
         assert isinstance(moments, list)
 
+    def test_custom_prompts_passed_to_semantic_detector(self):
+        """Pipeline should pass settings.semantic_prompts to SemanticDetector."""
+        custom_prompts = ["crashes", "cars", "celebrations"]
+        settings = Settings(
+            scene_weight=0.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            semantic_weight=1.0,
+            emotion_weight=0.0,
+            semantic_prompts=custom_prompts,
+        )
+        pipeline = DetectionPipeline(settings)
+
+        # Mock the lazy-loader to return a mock class and capture args
+        captured_kwargs = {}
+
+        class FakeSemanticDetector:
+            name = "semantic"
+
+            def __init__(self, **kwargs):
+                captured_kwargs.update(kwargs)
+
+            def detect(self, *args, **kwargs):
+                return DetectorResult(
+                    name="semantic",
+                    scores=np.array([0.5]),
+                    time_step=0.1,
+                    source_path="test.mp4",
+                )
+
+        with patch(
+            "clipshow.detection.pipeline._get_optional_detector",
+            side_effect=lambda n: FakeSemanticDetector if n == "semantic" else None,
+        ):
+            detectors = pipeline._build_detectors()
+
+        assert len(detectors) == 1
+        assert captured_kwargs.get("prompts") == custom_prompts
+
     def test_analyze_all_combines_results(self):
         settings = Settings(
             scene_weight=1.0,

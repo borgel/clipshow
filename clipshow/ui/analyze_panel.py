@@ -5,6 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -18,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from clipshow.config import Settings
 from clipshow.model.project import Project
+from clipshow.ui.prompt_editor import PromptEditor
 from clipshow.workers.analysis_worker import AnalysisWorker
 
 # Slider scale: sliders are 0-100 integers, mapped to 0.0-1.0 floats
@@ -81,6 +84,28 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.motion_label)
         weights_layout.addRow("Motion:", row)
 
+        self.semantic_check = QCheckBox()
+        self.semantic_slider = QSlider(Qt.Orientation.Horizontal)
+        self.semantic_slider.setRange(0, SLIDER_SCALE)
+        self.semantic_label = QLabel()
+        self.edit_prompts_button = QPushButton("Edit Prompts…")
+        row = QHBoxLayout()
+        row.addWidget(self.semantic_check)
+        row.addWidget(self.semantic_slider)
+        row.addWidget(self.semantic_label)
+        row.addWidget(self.edit_prompts_button)
+        weights_layout.addRow("Semantic:", row)
+
+        self.emotion_check = QCheckBox()
+        self.emotion_slider = QSlider(Qt.Orientation.Horizontal)
+        self.emotion_slider.setRange(0, SLIDER_SCALE)
+        self.emotion_label = QLabel()
+        row = QHBoxLayout()
+        row.addWidget(self.emotion_check)
+        row.addWidget(self.emotion_slider)
+        row.addWidget(self.emotion_label)
+        weights_layout.addRow("Emotion:", row)
+
         weights_group.setLayout(weights_layout)
         layout.addWidget(weights_group)
 
@@ -119,6 +144,12 @@ class AnalyzePanel(QWidget):
         self.scene_check.toggled.connect(lambda on: self._on_check_toggled("scene", on))
         self.audio_check.toggled.connect(lambda on: self._on_check_toggled("audio", on))
         self.motion_check.toggled.connect(lambda on: self._on_check_toggled("motion", on))
+        self.semantic_check.toggled.connect(
+            lambda on: self._on_check_toggled("semantic", on)
+        )
+        self.emotion_check.toggled.connect(
+            lambda on: self._on_check_toggled("emotion", on)
+        )
 
         self.scene_slider.valueChanged.connect(
             lambda v: self._on_slider_changed("scene", v)
@@ -129,8 +160,15 @@ class AnalyzePanel(QWidget):
         self.motion_slider.valueChanged.connect(
             lambda v: self._on_slider_changed("motion", v)
         )
+        self.semantic_slider.valueChanged.connect(
+            lambda v: self._on_slider_changed("semantic", v)
+        )
+        self.emotion_slider.valueChanged.connect(
+            lambda v: self._on_slider_changed("emotion", v)
+        )
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
 
+        self.edit_prompts_button.clicked.connect(self._open_prompt_editor)
         self.analyze_button.clicked.connect(self.start_analysis)
         self.cancel_button.clicked.connect(self.cancel_analysis)
 
@@ -139,6 +177,8 @@ class AnalyzePanel(QWidget):
         self.scene_slider.setValue(int(self.settings.scene_weight * SLIDER_SCALE))
         self.audio_slider.setValue(int(self.settings.audio_weight * SLIDER_SCALE))
         self.motion_slider.setValue(int(self.settings.motion_weight * SLIDER_SCALE))
+        self.semantic_slider.setValue(int(self.settings.semantic_weight * SLIDER_SCALE))
+        self.emotion_slider.setValue(int(self.settings.emotion_weight * SLIDER_SCALE))
         self.threshold_slider.setValue(
             int(self.settings.score_threshold * SLIDER_SCALE)
         )
@@ -146,6 +186,8 @@ class AnalyzePanel(QWidget):
         self.scene_check.setChecked(self.settings.scene_weight > 0)
         self.audio_check.setChecked(self.settings.audio_weight > 0)
         self.motion_check.setChecked(self.settings.motion_weight > 0)
+        self.semantic_check.setChecked(self.settings.semantic_weight > 0)
+        self.emotion_check.setChecked(self.settings.emotion_weight > 0)
 
     def _on_check_toggled(self, detector: str, enabled: bool) -> None:
         slider = getattr(self, f"{detector}_slider")
@@ -162,6 +204,26 @@ class AnalyzePanel(QWidget):
     def _on_threshold_changed(self, value: int) -> None:
         self.settings.score_threshold = value / SLIDER_SCALE
         self.threshold_label.setText(f"{value / SLIDER_SCALE:.2f}")
+
+    def _open_prompt_editor(self) -> None:
+        """Open a dialog with the PromptEditor widget."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Edit Semantic Prompts")
+        dlg.setMinimumSize(400, 300)
+        layout = QVBoxLayout(dlg)
+
+        editor = PromptEditor(self.settings.semantic_prompts)
+        layout.addWidget(editor)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.settings.semantic_prompts = editor.prompts
 
     def start_analysis(self) -> None:
         """Launch the analysis worker thread."""

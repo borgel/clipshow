@@ -40,6 +40,8 @@ class TestInitialState:
         assert panel.scene_slider.value() == int(s.scene_weight * SLIDER_SCALE)
         assert panel.audio_slider.value() == int(s.audio_weight * SLIDER_SCALE)
         assert panel.motion_slider.value() == int(s.motion_weight * SLIDER_SCALE)
+        assert panel.semantic_slider.value() == int(s.semantic_weight * SLIDER_SCALE)
+        assert panel.emotion_slider.value() == int(s.emotion_weight * SLIDER_SCALE)
 
     def test_threshold_matches_default(self, panel):
         s = Settings()
@@ -49,6 +51,10 @@ class TestInitialState:
         assert panel.scene_check.isChecked() is True
         assert panel.audio_check.isChecked() is True
         assert panel.motion_check.isChecked() is True
+        # semantic defaults to 0.0, so unchecked
+        assert panel.semantic_check.isChecked() is False
+        # emotion defaults to 0.2, so checked
+        assert panel.emotion_check.isChecked() is True
 
     def test_analyze_button_enabled(self, panel):
         assert panel.analyze_button.isEnabled() is True
@@ -73,6 +79,15 @@ class TestSliderBinding:
         panel.motion_slider.setValue(80)
         assert panel.settings.motion_weight == pytest.approx(0.8)
 
+    def test_semantic_slider_updates_settings(self, panel):
+        panel.semantic_check.setChecked(True)
+        panel.semantic_slider.setValue(50)
+        assert panel.settings.semantic_weight == pytest.approx(0.5)
+
+    def test_emotion_slider_updates_settings(self, panel):
+        panel.emotion_slider.setValue(35)
+        assert panel.settings.emotion_weight == pytest.approx(0.35)
+
     def test_threshold_slider_updates_settings(self, panel):
         panel.threshold_slider.setValue(70)
         assert panel.settings.score_threshold == pytest.approx(0.7)
@@ -84,6 +99,12 @@ class TestSliderBinding:
     def test_threshold_updates_label(self, panel):
         panel.threshold_slider.setValue(55)
         assert panel.threshold_label.text() == "0.55"
+
+
+class TestEditPromptsButton:
+    def test_edit_prompts_button_exists(self, panel):
+        assert panel.edit_prompts_button is not None
+        assert panel.edit_prompts_button.text() == "Edit Prompts\u2026"
 
 
 class TestCheckboxBehavior:
