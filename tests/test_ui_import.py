@@ -1,5 +1,7 @@
 """UI tests: import panel file management and button states."""
 
+from unittest.mock import patch
+
 import pytest
 
 from clipshow.model.project import Project, VideoSource
@@ -154,6 +156,30 @@ class TestSelectionStates:
         panel.file_table.selectRow(0)
         panel.file_table.clearSelection()
         assert panel.remove_button.isEnabled() is False
+
+
+class TestAddFilesWithFfprobeFailure:
+    def test_ffprobe_failure_still_adds_file(self, panel):
+        """When ffprobe fails, file should still appear with placeholder data."""
+        with patch(
+            "clipshow.ui.import_panel.extract_metadata",
+            side_effect=RuntimeError("ffprobe not found"),
+        ):
+            panel.add_files(["/tmp/broken.mp4"])
+        assert panel.file_count == 1
+        assert panel.file_table.item(0, 0).text() == "broken.mp4"
+        assert panel.file_table.item(0, 1).text() == "--:--"
+        assert panel.file_table.item(0, 2).text() == "0x0"
+
+    def test_file_not_found_still_adds_row(self, panel):
+        """When file doesn't exist, row should still appear."""
+        with patch(
+            "clipshow.ui.import_panel.extract_metadata",
+            side_effect=FileNotFoundError("no such file"),
+        ):
+            panel.add_files(["/tmp/missing.mp4"])
+        assert panel.file_count == 1
+        assert panel.file_table.item(0, 3).text() == "/tmp/missing.mp4"
 
 
 class TestDurationFormat:
