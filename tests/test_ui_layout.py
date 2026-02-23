@@ -1,6 +1,16 @@
 """UI tests: main window layout and tab navigation."""
 
+from clipshow.model.project import VideoSource
 from clipshow.ui.main_window import MainWindow
+
+
+def _window_with_file(qtbot):
+    """Create a MainWindow with one file loaded so Next is enabled."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    source = VideoSource(path="/tmp/test.mp4", duration=10.0, width=1920, height=1080)
+    window.import_panel.add_source_directly(source)
+    return window
 
 
 class TestMainWindow:
@@ -31,30 +41,31 @@ class TestMainWindow:
         qtbot.addWidget(window)
         assert window.back_button.isEnabled() is False
 
-    def test_next_enabled_on_first_tab(self, qtbot):
+    def test_next_disabled_with_no_files(self, qtbot):
         window = MainWindow()
         qtbot.addWidget(window)
+        assert window.next_button.isEnabled() is False
+
+    def test_next_enabled_after_file_added(self, qtbot):
+        window = _window_with_file(qtbot)
         assert window.next_button.isEnabled() is True
 
     def test_next_advances_tab(self, qtbot):
-        window = MainWindow()
-        qtbot.addWidget(window)
+        window = _window_with_file(qtbot)
         assert window.tabs.currentIndex() == 0
         window.next_button.click()
         assert window.tabs.currentIndex() == 1
         assert window.tabs.isTabEnabled(1) is True
 
     def test_back_returns_to_previous(self, qtbot):
-        window = MainWindow()
-        qtbot.addWidget(window)
+        window = _window_with_file(qtbot)
         window.next_button.click()
         assert window.tabs.currentIndex() == 1
         window.back_button.click()
         assert window.tabs.currentIndex() == 0
 
     def test_next_disabled_on_last_tab(self, qtbot):
-        window = MainWindow()
-        qtbot.addWidget(window)
+        window = _window_with_file(qtbot)
         for _ in range(3):
             window.next_button.click()
         assert window.tabs.currentIndex() == 3
@@ -62,8 +73,7 @@ class TestMainWindow:
 
     def test_sequential_tab_enabling(self, qtbot):
         """Tabs should enable sequentially as Next is clicked."""
-        window = MainWindow()
-        qtbot.addWidget(window)
+        window = _window_with_file(qtbot)
         for expected_tab in range(1, 4):
             window.next_button.click()
             assert window.tabs.currentIndex() == expected_tab

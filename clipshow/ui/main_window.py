@@ -11,14 +11,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from clipshow.model.project import Project
+from clipshow.ui.import_panel import ImportPanel
+
 
 class MainWindow(QMainWindow):
     """ClipShow main window with Import → Analyze → Review → Export tabs."""
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, project: Project | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("ClipShow")
         self.setMinimumSize(800, 600)
+
+        self.project = project or Project()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -28,8 +33,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
-        # Create placeholder panels
-        self.import_panel = QWidget()
+        # Create panels
+        self.import_panel = ImportPanel(self.project)
         self.analyze_panel = QWidget()
         self.review_panel = QWidget()
         self.export_panel = QWidget()
@@ -49,6 +54,7 @@ class MainWindow(QMainWindow):
         self.next_button = QPushButton("Next")
 
         self.back_button.setEnabled(False)
+        self.next_button.setEnabled(False)  # disabled until files imported
         nav_layout.addStretch()
         nav_layout.addWidget(self.back_button)
         nav_layout.addWidget(self.next_button)
@@ -58,6 +64,7 @@ class MainWindow(QMainWindow):
         self.back_button.clicked.connect(self._go_back)
         self.next_button.clicked.connect(self._go_next)
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.import_panel.files_changed.connect(self._on_files_changed)
 
     def _go_back(self) -> None:
         current = self.tabs.currentIndex()
@@ -73,11 +80,15 @@ class MainWindow(QMainWindow):
 
     def _on_tab_changed(self, index: int) -> None:
         self.back_button.setEnabled(index > 0)
-        self.next_button.setEnabled(index < self.tabs.count() - 1)
-        # Update button text on last tab
         if index == self.tabs.count() - 1:
-            self.next_button.setText("Next")
             self.next_button.setEnabled(False)
+        elif index == 0:
+            # On import tab, Next depends on whether files are loaded
+            self.next_button.setEnabled(self.import_panel.file_count > 0)
         else:
-            self.next_button.setText("Next")
             self.next_button.setEnabled(True)
+
+    def _on_files_changed(self) -> None:
+        """Update Next button state when files are added/removed on import tab."""
+        if self.tabs.currentIndex() == 0:
+            self.next_button.setEnabled(self.import_panel.file_count > 0)
