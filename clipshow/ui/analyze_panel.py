@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -33,6 +35,7 @@ class AnalyzePanel(QWidget):
     """Panel for configuring detectors and running analysis."""
 
     analysis_complete = Signal(list)  # list[DetectedMoment]
+    analysis_started = Signal()
 
     def __init__(
         self,
@@ -46,6 +49,9 @@ class AnalyzePanel(QWidget):
         self._worker: AnalysisWorker | None = None
         self._total_files: int = 0
         self._completed_files: int = 0
+        self._has_results: bool = False
+        self._analysis_start_time: float = 0.0
+        self._total_video_duration: float = 0.0
         self._setup_ui()
         self._connect_signals()
         self._load_settings()
@@ -152,6 +158,13 @@ class AnalyzePanel(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
+        # Frame preview (shown during analysis)
+        self.frame_preview_label = QLabel()
+        self.frame_preview_label.setFixedSize(320, 180)
+        self.frame_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.frame_preview_label.hide()
+        layout.addWidget(self.frame_preview_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
         # Buttons
         btn_layout = QHBoxLayout()
         self.analyze_button = QPushButton("Analyze All")
@@ -256,6 +269,8 @@ class AnalyzePanel(QWidget):
 
         self._total_files = len(self.project.sources)
         self._completed_files = 0
+        self._analysis_start_time = time.monotonic()
+        self._total_video_duration = sum(s.duration for s in self.project.sources)
 
         video_paths = [(s.path, s.duration) for s in self.project.sources]
         self._worker = AnalysisWorker(video_paths, self.settings)
@@ -264,14 +279,17 @@ class AnalyzePanel(QWidget):
         self._worker.all_complete.connect(self._on_all_complete)
         self._worker.error.connect(self._on_error)
         self._worker.status.connect(self._on_status)
+        self._worker.frame_preview.connect(self._on_frame_preview)
 
         n = self._total_files
         self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
         self.progress_bar.setValue(0)
         self.progress_bar.show()
+        self.frame_preview_label.show()
         self.analyze_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self._worker.start()
+        self.analysis_started.emit()
 
     def cancel_analysis(self) -> None:
         """Request cancellation of the running worker."""
@@ -282,15 +300,39 @@ class AnalyzePanel(QWidget):
     def _on_status(self, message: str) -> None:
         self.status_label.setText(message)
 
+    @staticmethod
+    def _format_eta(seconds: float) -> str:
+        """Format seconds into a human-readable ETA string."""
+        if seconds < 60:
+            return f"~{int(seconds)}s remaining"
+        minutes = int(seconds) // 60
+        secs = int(seconds) % 60
+        return f"~{minutes}m {secs:02d}s remaining"
+
     def _on_progress(self, source_path: str, fraction: float) -> None:
         # Overall progress = (completed files + current file fraction) / total files
         overall = (self._completed_files + fraction) / self._total_files
         self.progress_bar.setValue(int(overall * 100))
         basename = Path(source_path).name
-        self.status_label.setText(
+
+        # Compute rate and ETA
+        elapsed = time.monotonic() - self._analysis_start_time
+        rate_str = ""
+        eta_str = ""
+        if elapsed > 1.0 and overall > 0.01:
+            processed_duration = self._total_video_duration * overall
+            rate = processed_duration / elapsed
+            rate_str = f"{rate:.1f}x realtime"
+            eta = elapsed * (1 - overall) / overall
+            eta_str = self._format_eta(eta)
+
+        parts = [
             f"Analyzing {basename} "
-            f"({self._completed_files + 1} of {self._total_files})..."
-        )
+            f"({self._completed_files + 1} of {self._total_files})"
+        ]
+        if rate_str:
+            parts.append(f"\u2014 {rate_str}, {eta_str}")
+        self.status_label.setText(" ".join(parts))
 
     def _on_file_complete(self, source_path: str) -> None:
         self._completed_files += 1
@@ -298,6 +340,11 @@ class AnalyzePanel(QWidget):
         self.status_label.setText(
             f"Completed {basename} ({self._completed_files} of {self._total_files})"
         )
+
+    def _on_frame_preview(self, image: QImage) -> None:
+        """Display a frame thumbnail from the analysis worker."""
+        pixmap = QPixmap.fromImage(image)
+        self.frame_preview_label.setPixmap(pixmap)
 
     def _on_all_complete(self, moments: list) -> None:
         n = self._total_files
@@ -307,17 +354,24 @@ class AnalyzePanel(QWidget):
             f"in {n} video{'s' if n != 1 else ''}"
         )
         self.progress_bar.hide()
+        self.frame_preview_label.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
+        self._has_results = True
         self.analysis_complete.emit(moments)
 
     def _on_error(self, message: str) -> None:
         self.status_label.setText(f"Error: {message}")
         self.progress_bar.hide()
+        self.frame_preview_label.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
+
+    @property
+    def has_results(self) -> bool:
+        return self._has_results
 
     @property
     def is_analyzing(self) -> bool:
