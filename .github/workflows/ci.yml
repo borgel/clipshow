@@ -44,13 +44,13 @@ jobs:
         if: runner.os == 'Linux'
         uses: GabrielBB/xvfb-action@v1
         with:
-          run: pytest tests/ -v --cov=clipshow --cov-report=xml
+          run: pytest tests/ -v -n auto --cov=clipshow --cov-report=xml
         env:
           QT_QPA_PLATFORM: offscreen
 
       - name: Run tests (macOS/Windows)
         if: runner.os != 'Linux'
-        run: pytest tests/ -v --cov=clipshow --cov-report=xml
+        run: pytest tests/ -v -n auto --cov=clipshow --cov-report=xml
         env:
           QT_QPA_PLATFORM: offscreen
 

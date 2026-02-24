@@ -51,16 +51,11 @@ class SceneDetector(Detector):
         num_samples = max(1, int(np.ceil(duration / self._time_step)))
         scores = np.zeros(num_samples, dtype=float)
 
-        # Extract per-frame content_val from the stats manager
+        # Extract per-frame content_val from the stats manager.
+        # ContentDetector stores the combined score as "content_val".
         metric_keys = stats.metric_keys
-        if metric_keys:
-            content_key = None
-            for key in metric_keys:
-                if "content" in key.lower() or "delta" in key.lower():
-                    content_key = key
-                    break
-            if content_key is None:
-                content_key = list(metric_keys)[0]
+        if metric_keys and ContentDetector.FRAME_SCORE_KEY in metric_keys:
+            content_key = ContentDetector.FRAME_SCORE_KEY
 
             for frame_num in range(frame_count):
                 if stats.metrics_exist(frame_num, [content_key]):
