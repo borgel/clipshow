@@ -89,9 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ClipShow-windows
-          path: |
-            dist/ClipShow/
-            Output/ClipShow-*-setup.exe
+          path: packaging/Output/ClipShow-*-setup.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -160,6 +158,9 @@ jobs:
 
       - name: Create artifacts directory
         run: mkdir -p artifacts
+
+      - name: List artifacts
+        run: find artifacts/ -type f | head -50
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
