@@ -55,6 +55,7 @@ def assemble_highlights(
             codec=codec,
             fps=fps,
             bitrate=bitrate,
+            threads=0,
             logger=None,
         )
 

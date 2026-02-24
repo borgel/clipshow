@@ -36,6 +36,7 @@ class AudioDetector(Detector):
                     "-acodec", "pcm_s16le",
                     "-ar", str(self._sr),
                     "-ac", "1",
+                    "-threads", "0",
                     tmp.name,
                 ],
                 capture_output=True,
