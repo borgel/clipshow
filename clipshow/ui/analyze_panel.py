@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -191,10 +192,24 @@ class AnalyzePanel(QWidget):
         self.progress_bar.hide()
         progress_layout.addWidget(self.progress_bar)
 
-        # File status list
+        # File status list + frame preview side by side
+        file_preview_splitter = QSplitter(Qt.Orientation.Horizontal)
+
         self.file_list = QListWidget()
         self.file_list.setAlternatingRowColors(True)
-        progress_layout.addWidget(self.file_list, stretch=1)
+        file_preview_splitter.addWidget(self.file_list)
+
+        self.frame_preview_label = QLabel()
+        self.frame_preview_label.setMinimumSize(160, 90)
+        self.frame_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.frame_preview_label.setScaledContents(True)
+        self.frame_preview_label.setStyleSheet("background: black;")
+        file_preview_splitter.addWidget(self.frame_preview_label)
+
+        file_preview_splitter.setStretchFactor(0, 1)
+        file_preview_splitter.setStretchFactor(1, 1)
+
+        progress_layout.addWidget(file_preview_splitter, stretch=1)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -340,6 +355,7 @@ class AnalyzePanel(QWidget):
         self._worker.all_complete.connect(self._on_all_complete)
         self._worker.error.connect(self._on_error)
         self._worker.status.connect(self._on_status)
+        self._worker.frame_preview.connect(self._on_frame_preview)
 
         n = self._total_files
         self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
@@ -410,6 +426,11 @@ class AnalyzePanel(QWidget):
         self.status_label.setText(
             f"Completed {basename} ({self._completed_files} of {self._total_files})"
         )
+
+    def _on_frame_preview(self, image: QImage) -> None:
+        """Display a frame thumbnail from the analysis worker."""
+        pixmap = QPixmap.fromImage(image)
+        self.frame_preview_label.setPixmap(pixmap)
 
     def _on_all_complete(self, moments: list) -> None:
         n = self._total_files
