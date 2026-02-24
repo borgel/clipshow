@@ -357,6 +357,7 @@ class TestPipelineE2E:
             scene_weight=0.3,
             audio_weight=0.0,
             motion_weight=0.25,
+            emotion_weight=0.0,
             score_threshold=0.3,
             min_segment_duration_sec=0.2,
         )

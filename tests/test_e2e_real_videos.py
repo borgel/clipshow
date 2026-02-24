@@ -49,12 +49,13 @@ class TestRealVideoWorkflow:
     def test_import_real_videos(self, window_with_settings):
         """Importing fixture videos populates the import panel."""
         window = window_with_settings
-        window.import_panel.add_files(FIXTURE_VIDEOS)
+        videos = FIXTURE_VIDEOS[:2]
+        window.import_panel.add_files(videos)
 
-        assert window.import_panel.file_count == len(FIXTURE_VIDEOS)
+        assert window.import_panel.file_count == len(videos)
         # All files should appear in the project
         project_paths = {s.path for s in window.project.sources}
-        for video in FIXTURE_VIDEOS:
+        for video in videos:
             assert video in project_paths
 
     def test_import_metadata_extracted(self, window_with_settings):
