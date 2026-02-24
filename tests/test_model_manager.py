@@ -16,11 +16,21 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+import clipshow.detection.models as models_mod
 from clipshow.detection.models import MODEL_REGISTRY, ModelManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_ort():
+    """Ensure clipshow.detection.models.ort is a mock module (for CI without onnxruntime)."""
+    mock = MagicMock()
+    mock.get_available_providers.return_value = ["CPUExecutionProvider"]
+    with patch.object(models_mod, "ort", mock):
+        yield mock
 
 
 @pytest.fixture
@@ -223,58 +233,49 @@ class TestEnsureModel:
 class TestGetProviders:
     """_get_providers should detect and prioritize execution providers."""
 
-    def test_returns_list(self, manager):
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=["CPUExecutionProvider"],
-        ):
-            providers = manager._get_providers()
+    def test_returns_list(self, manager, mock_ort):
+        mock_ort.get_available_providers.return_value = ["CPUExecutionProvider"]
+        providers = manager._get_providers()
         assert isinstance(providers, list)
 
-    def test_cpu_always_present(self, manager):
+    def test_cpu_always_present(self, manager, mock_ort):
         """CPUExecutionProvider should always be included when available."""
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=["CPUExecutionProvider"],
-        ):
-            providers = manager._get_providers()
+        mock_ort.get_available_providers.return_value = ["CPUExecutionProvider"]
+        providers = manager._get_providers()
         assert "CPUExecutionProvider" in providers
 
-    def test_cuda_preferred_over_cpu(self, manager):
+    def test_cuda_preferred_over_cpu(self, manager, mock_ort):
         """CUDA should appear before CPU when both are available."""
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=["CPUExecutionProvider", "CUDAExecutionProvider"],
-        ):
-            providers = manager._get_providers()
+        mock_ort.get_available_providers.return_value = [
+            "CPUExecutionProvider",
+            "CUDAExecutionProvider",
+        ]
+        providers = manager._get_providers()
 
         cuda_idx = providers.index("CUDAExecutionProvider")
         cpu_idx = providers.index("CPUExecutionProvider")
         assert cuda_idx < cpu_idx
 
-    def test_coreml_preferred_over_cpu(self, manager):
+    def test_coreml_preferred_over_cpu(self, manager, mock_ort):
         """CoreML should appear before CPU when both are available."""
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=["CPUExecutionProvider", "CoreMLExecutionProvider"],
-        ):
-            providers = manager._get_providers()
+        mock_ort.get_available_providers.return_value = [
+            "CPUExecutionProvider",
+            "CoreMLExecutionProvider",
+        ]
+        providers = manager._get_providers()
 
         coreml_idx = providers.index("CoreMLExecutionProvider")
         cpu_idx = providers.index("CPUExecutionProvider")
         assert coreml_idx < cpu_idx
 
-    def test_cuda_preferred_over_coreml(self, manager):
+    def test_cuda_preferred_over_coreml(self, manager, mock_ort):
         """Full priority order: CUDA > CoreML > CPU."""
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=[
-                "CPUExecutionProvider",
-                "CoreMLExecutionProvider",
-                "CUDAExecutionProvider",
-            ],
-        ):
-            providers = manager._get_providers()
+        mock_ort.get_available_providers.return_value = [
+            "CPUExecutionProvider",
+            "CoreMLExecutionProvider",
+            "CUDAExecutionProvider",
+        ]
+        providers = manager._get_providers()
 
         assert providers.index("CUDAExecutionProvider") < providers.index(
             "CoreMLExecutionProvider"
@@ -283,13 +284,10 @@ class TestGetProviders:
             "CPUExecutionProvider"
         )
 
-    def test_unavailable_providers_excluded(self, manager):
+    def test_unavailable_providers_excluded(self, manager, mock_ort):
         """Providers not reported by ORT should not appear in the list."""
-        with patch(
-            "onnxruntime.get_available_providers",
-            return_value=["CPUExecutionProvider"],
-        ):
-            providers = manager._get_providers()
+        mock_ort.get_available_providers.return_value = ["CPUExecutionProvider"]
+        providers = manager._get_providers()
 
         assert "CUDAExecutionProvider" not in providers
         assert "CoreMLExecutionProvider" not in providers
@@ -303,68 +301,65 @@ class TestGetProviders:
 class TestLoadSession:
     """load_session should create an InferenceSession with correct providers."""
 
-    def test_returns_inference_session(self, manager, tmp_cache):
+    def test_returns_inference_session(self, manager, tmp_cache, mock_ort):
         """load_session should return an ort.InferenceSession."""
         name, meta = _first_model()
         _populate_cache(tmp_cache, meta["file"])
 
         mock_session = MagicMock()
-        with patch("onnxruntime.InferenceSession", return_value=mock_session):
-            with patch.object(
-                manager, "_get_providers", return_value=["CPUExecutionProvider"]
-            ):
-                session = manager.load_session(name)
+        mock_ort.InferenceSession.return_value = mock_session
+        with patch.object(
+            manager, "_get_providers", return_value=["CPUExecutionProvider"]
+        ):
+            session = manager.load_session(name)
 
         assert session is mock_session
 
-    def test_passes_providers_to_session(self, manager, tmp_cache):
+    def test_passes_providers_to_session(self, manager, tmp_cache, mock_ort):
         """load_session should pass detected providers to InferenceSession."""
         name, meta = _first_model()
         _populate_cache(tmp_cache, meta["file"])
 
         expected_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        with patch("onnxruntime.InferenceSession") as mock_cls:
-            with patch.object(
-                manager, "_get_providers", return_value=expected_providers
-            ):
-                manager.load_session(name)
+        with patch.object(
+            manager, "_get_providers", return_value=expected_providers
+        ):
+            manager.load_session(name)
 
-        call_kwargs = mock_cls.call_args.kwargs
+        call_kwargs = mock_ort.InferenceSession.call_args.kwargs
         assert call_kwargs.get("providers") == expected_providers
 
-    def test_passes_model_path_to_session(self, manager, tmp_cache):
+    def test_passes_model_path_to_session(self, manager, tmp_cache, mock_ort):
         """load_session should pass the correct model file path as string."""
         name, meta = _first_model()
         expected_path = _populate_cache(tmp_cache, meta["file"])
 
-        with patch("onnxruntime.InferenceSession") as mock_cls:
-            with patch.object(
-                manager, "_get_providers", return_value=["CPUExecutionProvider"]
-            ):
-                manager.load_session(name)
+        with patch.object(
+            manager, "_get_providers", return_value=["CPUExecutionProvider"]
+        ):
+            manager.load_session(name)
 
         # First positional arg should be the model path as a string
-        call_args = mock_cls.call_args.args
+        call_args = mock_ort.InferenceSession.call_args.args
         assert call_args[0] == str(expected_path)
 
-    def test_delegates_to_ensure_model(self, manager):
+    def test_delegates_to_ensure_model(self, manager, mock_ort):
         """load_session should call ensure_model to get the model path."""
         name, _ = _first_model()
 
         with patch.object(
             manager, "ensure_model", return_value=Path("/fake/model.onnx")
         ) as mock_ensure:
-            with patch("onnxruntime.InferenceSession"):
-                with patch.object(
-                    manager,
-                    "_get_providers",
-                    return_value=["CPUExecutionProvider"],
-                ):
-                    manager.load_session(name)
+            with patch.object(
+                manager,
+                "_get_providers",
+                return_value=["CPUExecutionProvider"],
+            ):
+                manager.load_session(name)
 
         mock_ensure.assert_called_once_with(name)
 
-    def test_unknown_model_raises(self, manager):
+    def test_unknown_model_raises(self, manager, mock_ort):
         """load_session with unknown model should raise KeyError (via ensure_model)."""
         with pytest.raises(KeyError):
             manager.load_session("nonexistent-model-xyz")

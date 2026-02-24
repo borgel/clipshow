@@ -12,6 +12,11 @@ import logging
 import urllib.request
 from pathlib import Path
 
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY: dict[str, dict] = {
@@ -82,16 +87,19 @@ class ModelManager:
 
     def load_session(self, name: str, **kwargs):
         """Load an ONNX Runtime session for a model."""
-        import onnxruntime as ort
-
+        if ort is None:
+            raise ImportError(
+                "onnxruntime is required for model loading. "
+                "Install with: pip install onnxruntime"
+            )
         path = self.ensure_model(name)
         providers = self._get_providers()
         return ort.InferenceSession(str(path), providers=providers)
 
     def _get_providers(self) -> list[str]:
         """Detect available execution providers, prefer GPU."""
-        import onnxruntime as ort
-
+        if ort is None:
+            return ["CPUExecutionProvider"]
         available = ort.get_available_providers()
         preferred = [
             "CUDAExecutionProvider",
