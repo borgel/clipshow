@@ -253,21 +253,39 @@ class TestAnalysisStartedSignal:
         assert signals == []
 
 
-class TestFramePreview:
+class TestFileList:
     @patch.object(AnalysisWorker, "start")
-    def test_preview_shown_on_start(self, mock_start, panel):
+    def test_file_list_populated_on_start(self, mock_start, panel):
         panel.start_analysis()
-        assert not panel.frame_preview_label.isHidden()
+        assert panel.file_list.count() == 2
 
-    def test_preview_hidden_on_complete(self, panel):
-        panel.frame_preview_label.show()
-        panel._on_all_complete([])
-        assert panel.frame_preview_label.isHidden()
+    @patch.object(AnalysisWorker, "start")
+    def test_first_file_marked_analyzing(self, mock_start, panel):
+        panel.start_analysis()
+        text = panel.file_list.item(0).text()
+        assert "a.mp4" in text
+        assert "\u25B6" in text  # play triangle
 
-    def test_preview_hidden_on_error(self, panel):
-        panel.frame_preview_label.show()
-        panel._on_error("failed")
-        assert panel.frame_preview_label.isHidden()
+    @patch.object(AnalysisWorker, "start")
+    def test_second_file_pending(self, mock_start, panel):
+        panel.start_analysis()
+        text = panel.file_list.item(1).text()
+        assert "b.mp4" in text
+        assert "\u2500" in text  # dash (pending)
+
+    @patch.object(AnalysisWorker, "start")
+    def test_file_complete_marks_checkmark(self, mock_start, panel):
+        panel.start_analysis()
+        panel._on_file_complete("/tmp/a.mp4")
+        text = panel.file_list.item(0).text()
+        assert "\u2714" in text  # checkmark
+
+    @patch.object(AnalysisWorker, "start")
+    def test_next_file_becomes_analyzing(self, mock_start, panel):
+        panel.start_analysis()
+        panel._on_file_complete("/tmp/a.mp4")
+        text = panel.file_list.item(1).text()
+        assert "\u25B6" in text  # now analyzing
 
 
 class TestETAFormatting:

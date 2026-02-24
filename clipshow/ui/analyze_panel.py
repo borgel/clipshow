@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -15,9 +14,13 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSlider,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -29,6 +32,11 @@ from clipshow.workers.analysis_worker import AnalysisWorker
 
 # Slider scale: sliders are 0-100 integers, mapped to 0.0-1.0 floats
 SLIDER_SCALE = 100
+
+# Status markers for the file list
+_PENDING = "\u2500"  # dash
+_ANALYZING = "\u25B6"  # play triangle
+_COMPLETE = "\u2714"  # checkmark
 
 
 class AnalyzePanel(QWidget):
@@ -52,16 +60,28 @@ class AnalyzePanel(QWidget):
         self._has_results: bool = False
         self._analysis_start_time: float = 0.0
         self._total_video_duration: float = 0.0
+        self._source_paths: list[str] = []
         self._setup_ui()
         self._connect_signals()
         self._load_settings()
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        layout.addWidget(splitter)
+
+        # --- Top: settings in a scroll area ---
+        settings_widget = QWidget()
+        settings_layout = QVBoxLayout(settings_widget)
+        settings_layout.setContentsMargins(4, 4, 4, 4)
 
         # Detector weights group
         weights_group = QGroupBox("Detector Weights")
         weights_layout = QFormLayout()
+        weights_layout.setContentsMargins(6, 6, 6, 6)
+        weights_layout.setVerticalSpacing(4)
 
         self.scene_check = QCheckBox()
         self.scene_slider = QSlider(Qt.Orientation.Horizontal)
@@ -124,11 +144,13 @@ class AnalyzePanel(QWidget):
         weights_layout.addRow(weights_help)
 
         weights_group.setLayout(weights_layout)
-        layout.addWidget(weights_group)
+        settings_layout.addWidget(weights_group)
 
         # Threshold slider
         threshold_group = QGroupBox("Threshold")
         threshold_layout = QFormLayout()
+        threshold_layout.setContentsMargins(6, 6, 6, 6)
+        threshold_layout.setVerticalSpacing(4)
 
         self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
         self.threshold_slider.setRange(0, SLIDER_SCALE)
@@ -147,23 +169,32 @@ class AnalyzePanel(QWidget):
         threshold_layout.addRow(threshold_help)
 
         threshold_group.setLayout(threshold_layout)
-        layout.addWidget(threshold_group)
+        settings_layout.addWidget(threshold_group)
 
-        # Status and progress section
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(settings_widget)
+        splitter.addWidget(scroll)
+
+        # --- Bottom: progress area with file list ---
+        progress_widget = QWidget()
+        progress_layout = QVBoxLayout(progress_widget)
+        progress_layout.setContentsMargins(4, 4, 4, 4)
+
+        # Status and progress bar
         self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
+        progress_layout.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.hide()
-        layout.addWidget(self.progress_bar)
+        progress_layout.addWidget(self.progress_bar)
 
-        # Frame preview (shown during analysis)
-        self.frame_preview_label = QLabel()
-        self.frame_preview_label.setFixedSize(320, 180)
-        self.frame_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.frame_preview_label.hide()
-        layout.addWidget(self.frame_preview_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        # File status list
+        self.file_list = QListWidget()
+        self.file_list.setAlternatingRowColors(True)
+        progress_layout.addWidget(self.file_list, stretch=1)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -173,9 +204,13 @@ class AnalyzePanel(QWidget):
         btn_layout.addStretch()
         btn_layout.addWidget(self.analyze_button)
         btn_layout.addWidget(self.cancel_button)
-        layout.addLayout(btn_layout)
+        progress_layout.addLayout(btn_layout)
 
-        layout.addStretch()
+        splitter.addWidget(progress_widget)
+
+        # Give both halves equal starting weight
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
 
     def _connect_signals(self) -> None:
         self.scene_check.toggled.connect(lambda on: self._on_check_toggled("scene", on))
@@ -262,6 +297,29 @@ class AnalyzePanel(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self.settings.semantic_prompts = editor.prompts
 
+    def _populate_file_list(self) -> None:
+        """Fill the file list with source filenames and pending status."""
+        self.file_list.clear()
+        for path in self._source_paths:
+            name = Path(path).name
+            item = QListWidgetItem(f"{_PENDING}  {name}")
+            item.setForeground(Qt.GlobalColor.gray)
+            self.file_list.addItem(item)
+
+    def _update_file_status(self, index: int, marker: str) -> None:
+        """Update a single file's status marker and color in the list."""
+        if index < 0 or index >= self.file_list.count():
+            return
+        item = self.file_list.item(index)
+        name = Path(self._source_paths[index]).name
+        item.setText(f"{marker}  {name}")
+        if marker == _COMPLETE:
+            item.setForeground(Qt.GlobalColor.darkGreen)
+        elif marker == _ANALYZING:
+            item.setForeground(Qt.GlobalColor.white)
+        else:
+            item.setForeground(Qt.GlobalColor.gray)
+
     def start_analysis(self) -> None:
         """Launch the analysis worker thread."""
         if not self.project.sources:
@@ -271,6 +329,9 @@ class AnalyzePanel(QWidget):
         self._completed_files = 0
         self._analysis_start_time = time.monotonic()
         self._total_video_duration = sum(s.duration for s in self.project.sources)
+        self._source_paths = [s.path for s in self.project.sources]
+
+        self._populate_file_list()
 
         video_paths = [(s.path, s.duration) for s in self.project.sources]
         self._worker = AnalysisWorker(video_paths, self.settings)
@@ -279,15 +340,17 @@ class AnalyzePanel(QWidget):
         self._worker.all_complete.connect(self._on_all_complete)
         self._worker.error.connect(self._on_error)
         self._worker.status.connect(self._on_status)
-        self._worker.frame_preview.connect(self._on_frame_preview)
 
         n = self._total_files
         self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
         self.progress_bar.setValue(0)
         self.progress_bar.show()
-        self.frame_preview_label.show()
         self.analyze_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+
+        # Mark first file as analyzing
+        self._update_file_status(0, _ANALYZING)
+
         self._worker.start()
         self.analysis_started.emit()
 
@@ -335,16 +398,18 @@ class AnalyzePanel(QWidget):
         self.status_label.setText(" ".join(parts))
 
     def _on_file_complete(self, source_path: str) -> None:
+        # Mark completed file
+        self._update_file_status(self._completed_files, _COMPLETE)
         self._completed_files += 1
+
+        # Mark next file as analyzing (if any)
+        if self._completed_files < self._total_files:
+            self._update_file_status(self._completed_files, _ANALYZING)
+
         basename = Path(source_path).name
         self.status_label.setText(
             f"Completed {basename} ({self._completed_files} of {self._total_files})"
         )
-
-    def _on_frame_preview(self, image: QImage) -> None:
-        """Display a frame thumbnail from the analysis worker."""
-        pixmap = QPixmap.fromImage(image)
-        self.frame_preview_label.setPixmap(pixmap)
 
     def _on_all_complete(self, moments: list) -> None:
         n = self._total_files
@@ -354,7 +419,6 @@ class AnalyzePanel(QWidget):
             f"in {n} video{'s' if n != 1 else ''}"
         )
         self.progress_bar.hide()
-        self.frame_preview_label.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
@@ -364,7 +428,6 @@ class AnalyzePanel(QWidget):
     def _on_error(self, message: str) -> None:
         self.status_label.setText(f"Error: {message}")
         self.progress_bar.hide()
-        self.frame_preview_label.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
