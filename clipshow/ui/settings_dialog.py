@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSlider,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -140,6 +141,11 @@ class SettingsDialog(QDialog):
         self.bitrate_edit.setPlaceholderText("e.g. 8M")
         output_layout.addRow("Bitrate:", self.bitrate_edit)
 
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(0, 64)
+        self.workers_spin.setSpecialValueText("Auto (CPU count)")
+        output_layout.addRow("Max workers:", self.workers_spin)
+
         output_group.setLayout(output_layout)
         layout.addWidget(output_group)
 
@@ -181,6 +187,7 @@ class SettingsDialog(QDialog):
         self.codec_combo.setCurrentIndex(idx)
         self.fps_spin.setValue(self.settings.output_fps)
         self.bitrate_edit.setText(self.settings.output_bitrate)
+        self.workers_spin.setValue(self.settings.max_workers)
 
     def _apply_to_settings(self) -> None:
         """Write all control values back to self.settings."""
@@ -199,6 +206,7 @@ class SettingsDialog(QDialog):
         self.settings.output_codec = self.codec_combo.currentText()
         self.settings.output_fps = self.fps_spin.value()
         self.settings.output_bitrate = self.bitrate_edit.text().strip() or "8M"
+        self.settings.max_workers = self.workers_spin.value()
 
     # ── Slider helpers ────────────────────────────────────────────
 

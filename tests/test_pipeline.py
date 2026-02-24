@@ -140,6 +140,7 @@ class TestPipelineWithMocks:
             audio_weight=0.0,
             motion_weight=0.0,
             score_threshold=0.3,
+            max_workers=1,  # Force sequential to allow mock detectors
         )
         pipeline = DetectionPipeline(settings)
 
@@ -155,6 +156,94 @@ class TestPipelineWithMocks:
         # Should have moments from both videos
         # (mock returns same scores for both, but source_path differs)
         assert len(results) >= 2
+
+    def test_analyze_all_parallel_same_results(self):
+        """Parallel analyze_all should produce same results as sequential."""
+        import concurrent.futures
+
+        scores = np.zeros(50)
+        scores[20:30] = 0.9
+
+        # Sequential run with mock
+        settings_seq = Settings(
+            scene_weight=1.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            score_threshold=0.3,
+            max_workers=1,
+        )
+        pipeline_seq = DetectionPipeline(settings_seq)
+        mock_scene = self._mock_detector("scene", scores)
+        pipeline_seq._build_detectors = lambda: [("scene", mock_scene, 1.0)]
+
+        video_paths = [("video1.mp4", 5.0), ("video2.mp4", 5.0)]
+        sequential = pipeline_seq.analyze_all(video_paths)
+
+        # Parallel run — use ThreadPoolExecutor to avoid pickling issues,
+        # while still exercising the parallel code path (as_completed, etc.)
+        settings_par = Settings(
+            scene_weight=1.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            score_threshold=0.3,
+            max_workers=2,
+        )
+        pipeline_par = DetectionPipeline(settings_par)
+
+        def fake_analyze(sd, vp, vd):
+            """Fake single-video analysis returning predetermined moments."""
+            s = Settings(**sd)
+            p = DetectionPipeline(s)
+            mock = self._mock_detector("scene", scores)
+            p._build_detectors = lambda: [("scene", mock, 1.0)]
+            return p.analyze_video(vp, vd)
+
+        with (
+            patch(
+                "clipshow.detection.pipeline.concurrent.futures.ProcessPoolExecutor",
+                concurrent.futures.ThreadPoolExecutor,
+            ),
+            patch(
+                "clipshow.detection.pipeline._analyze_single_video",
+                side_effect=fake_analyze,
+            ),
+        ):
+            parallel = pipeline_par.analyze_all(video_paths)
+
+        assert len(parallel) == len(sequential)
+        # Both should have same peak scores (order may differ due to as_completed)
+        seq_scores = sorted(m.peak_score for m in sequential)
+        par_scores = sorted(m.peak_score for m in parallel)
+        assert seq_scores == pytest.approx(par_scores)
+
+    def test_analyze_all_parallel_cancel(self):
+        """Cancel flag should stop parallel processing."""
+        import concurrent.futures
+
+        settings = Settings(
+            scene_weight=1.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            max_workers=2,
+        )
+        pipeline = DetectionPipeline(settings)
+
+        # Cancel returns True immediately — should still not crash
+        with (
+            patch(
+                "clipshow.detection.pipeline.concurrent.futures.ProcessPoolExecutor",
+                concurrent.futures.ThreadPoolExecutor,
+            ),
+            patch(
+                "clipshow.detection.pipeline._analyze_single_video",
+                return_value=[],
+            ),
+        ):
+            video_paths = [(f"v{i}.mp4", 1.0) for i in range(10)]
+            result = pipeline.analyze_all(
+                video_paths, cancel_flag=lambda: True,
+            )
+            assert isinstance(result, list)
 
 
 class TestPipelineE2E:

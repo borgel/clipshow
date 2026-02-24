@@ -33,6 +33,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Output file path (default: highlight_reel.mp4)",
     )
     parser.add_argument(
+        "--workers", "-j",
+        type=int,
+        default=0,
+        help="Number of parallel workers (default: auto = CPU count)",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -49,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.auto:
         from clipshow.app import run_auto_mode
 
-        return run_auto_mode(args.files, args.output, headless=args.headless)
+        return run_auto_mode(args.files, args.output, headless=args.headless, workers=args.workers)
     else:
         from clipshow.app import run_gui
 

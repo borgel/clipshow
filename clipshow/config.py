@@ -1,6 +1,7 @@
 """Settings dataclass with JSON persistence."""
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -33,6 +34,9 @@ class Settings:
     min_segment_duration_sec: float = 1.0
     max_segment_duration_sec: float = 15.0
 
+    # Parallelism
+    max_workers: int = 0  # 0 = auto (cpu_count)
+
     # Output
     output_codec: str = "libx264"
     output_fps: float = 30.0
@@ -53,6 +57,12 @@ class Settings:
             return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
         except (json.JSONDecodeError, TypeError):
             return cls()
+
+    @property
+    def resolved_max_workers(self) -> int:
+        if self.max_workers > 0:
+            return self.max_workers
+        return os.cpu_count() or 4
 
     @property
     def detector_weights(self) -> dict[str, float]:

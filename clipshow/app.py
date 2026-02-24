@@ -27,6 +27,7 @@ def run_auto_mode(
     files: list[str],
     output_path: str,
     headless: bool = False,
+    workers: int = 0,
 ) -> int:
     """Run automatic highlight reel generation.
 
@@ -47,6 +48,8 @@ def run_auto_mode(
     from clipshow.model.moments import HighlightSegment
 
     settings = Settings()
+    if workers:
+        settings.max_workers = workers
     pipeline = DetectionPipeline(settings)
 
     # Step 1: Extract metadata

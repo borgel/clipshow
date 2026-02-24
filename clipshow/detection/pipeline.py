@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+from dataclasses import asdict
+
 import numpy as np
 
 from clipshow.config import Settings
@@ -38,6 +41,13 @@ def _get_optional_detector(name: str) -> type[Detector] | None:
         except ImportError:
             return None
     return None
+
+
+def _analyze_single_video(settings_dict: dict, video_path: str, video_duration: float):
+    """Top-level function for ProcessPoolExecutor (must be picklable)."""
+    settings = Settings(**settings_dict)
+    pipeline = DetectionPipeline(settings)
+    return pipeline.analyze_video(video_path, video_duration)
 
 
 class DetectionPipeline:
@@ -169,6 +179,22 @@ class DetectionPipeline:
         Returns:
             All detected moments across all videos, sorted by peak_score.
         """
+        workers = self.settings.resolved_max_workers
+        if workers == 1 or len(video_paths) <= 1:
+            return self._analyze_all_sequential(
+                video_paths, progress_callback, cancel_flag
+            )
+        return self._analyze_all_parallel(
+            video_paths, workers, progress_callback, cancel_flag
+        )
+
+    def _analyze_all_sequential(
+        self,
+        video_paths: list[tuple[str, float]],
+        progress_callback: callable | None = None,
+        cancel_flag: callable | None = None,
+    ) -> list[DetectedMoment]:
+        """Sequential analysis — preserves per-detector progress callbacks."""
         all_moments: list[DetectedMoment] = []
 
         for i, (path, duration) in enumerate(video_paths):
@@ -187,6 +213,48 @@ class DetectionPipeline:
                 cancel_flag=cancel_flag,
             )
             all_moments.extend(moments)
+
+        all_moments.sort(key=lambda m: m.peak_score, reverse=True)
+
+        if progress_callback:
+            progress_callback(1.0)
+
+        return all_moments
+
+    def _analyze_all_parallel(
+        self,
+        video_paths: list[tuple[str, float]],
+        workers: int,
+        progress_callback: callable | None = None,
+        cancel_flag: callable | None = None,
+    ) -> list[DetectedMoment]:
+        """Parallel analysis using ProcessPoolExecutor."""
+        all_moments: list[DetectedMoment] = []
+        settings_dict = asdict(self.settings)
+        total = len(video_paths)
+        completed = 0
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+            future_to_path = {
+                executor.submit(
+                    _analyze_single_video, settings_dict, path, duration
+                ): path
+                for path, duration in video_paths
+            }
+
+            for future in concurrent.futures.as_completed(future_to_path):
+                if cancel_flag and cancel_flag():
+                    # Cancel remaining futures
+                    for f in future_to_path:
+                        f.cancel()
+                    break
+
+                moments = future.result()
+                all_moments.extend(moments)
+                completed += 1
+
+                if progress_callback:
+                    progress_callback(completed / total)
 
         all_moments.sort(key=lambda m: m.peak_score, reverse=True)
 
