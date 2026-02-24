@@ -98,6 +98,7 @@ class TestPipelineWithMocks:
     def test_custom_prompts_passed_to_semantic_detector(self):
         """Pipeline should pass settings.semantic_prompts to SemanticDetector."""
         custom_prompts = ["crashes", "cars", "celebrations"]
+        custom_negatives = ["silence", "darkness"]
         settings = Settings(
             scene_weight=0.0,
             audio_weight=0.0,
@@ -105,6 +106,7 @@ class TestPipelineWithMocks:
             semantic_weight=1.0,
             emotion_weight=0.0,
             semantic_prompts=custom_prompts,
+            semantic_negative_prompts=custom_negatives,
         )
         pipeline = DetectionPipeline(settings)
 
@@ -133,6 +135,7 @@ class TestPipelineWithMocks:
 
         assert len(detectors) == 1
         assert captured_kwargs.get("prompts") == custom_prompts
+        assert captured_kwargs.get("negative_prompts") == custom_negatives
 
     def test_warning_on_missing_optional_detector(self):
         """Pipeline should warn when optional detector dependency is missing."""

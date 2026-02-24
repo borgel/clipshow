@@ -26,6 +26,14 @@ class Settings:
             "beautiful scenery",
         ]
     )
+    semantic_negative_prompts: list[str] = field(
+        default_factory=lambda: [
+            "boring static shot",
+            "blank wall",
+            "empty room",
+            "black screen",
+        ]
+    )
 
     # Segment selection
     pre_padding_sec: float = 1.0

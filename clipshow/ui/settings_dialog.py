@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from clipshow.config import Settings
-from clipshow.ui.prompt_editor import PromptEditor
+from clipshow.ui.prompt_editor import DEFAULT_NEGATIVE_PROMPTS, PromptEditor
 
 SLIDER_SCALE = 100
 
@@ -79,8 +79,18 @@ class SettingsDialog(QDialog):
         # ── Semantic Prompts ──────────────────────────────────────
         prompts_group = QGroupBox("Semantic Prompts")
         prompts_layout = QVBoxLayout()
+
+        prompts_layout.addWidget(QLabel("Positive (what to look for):"))
         self.prompt_editor = PromptEditor(self.settings.semantic_prompts)
         prompts_layout.addWidget(self.prompt_editor)
+
+        prompts_layout.addWidget(QLabel("Negative (what to ignore):"))
+        self.negative_prompt_editor = PromptEditor(
+            self.settings.semantic_negative_prompts,
+            default_prompts=DEFAULT_NEGATIVE_PROMPTS,
+        )
+        prompts_layout.addWidget(self.negative_prompt_editor)
+
         prompts_group.setLayout(prompts_layout)
         layout.addWidget(prompts_group)
 
@@ -175,6 +185,7 @@ class SettingsDialog(QDialog):
             self._weight_sliders[name].setValue(int(val * SLIDER_SCALE))
 
         self.prompt_editor.prompts = self.settings.semantic_prompts
+        self.negative_prompt_editor.prompts = self.settings.semantic_negative_prompts
 
         self.threshold_slider.setValue(int(self.settings.score_threshold * SLIDER_SCALE))
         self.pre_padding_spin.setValue(self.settings.pre_padding_sec)
@@ -196,6 +207,7 @@ class SettingsDialog(QDialog):
             setattr(self.settings, field, self._weight_sliders[name].value() / SLIDER_SCALE)
 
         self.settings.semantic_prompts = self.prompt_editor.prompts
+        self.settings.semantic_negative_prompts = self.negative_prompt_editor.prompts
 
         self.settings.score_threshold = self.threshold_slider.value() / SLIDER_SCALE
         self.settings.pre_padding_sec = self.pre_padding_spin.value()

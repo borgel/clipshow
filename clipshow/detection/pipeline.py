@@ -73,6 +73,7 @@ class DetectionPipeline:
                     kwargs = {}
                     if name == "semantic":
                         kwargs["prompts"] = self.settings.semantic_prompts
+                        kwargs["negative_prompts"] = self.settings.semantic_negative_prompts
                     result.append((name, cls(**kwargs), weight))
                 elif warning_callback:
                     warning_callback(

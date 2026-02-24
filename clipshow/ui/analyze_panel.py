@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from clipshow.config import Settings
 from clipshow.model.project import Project
-from clipshow.ui.prompt_editor import PromptEditor
+from clipshow.ui.prompt_editor import DEFAULT_NEGATIVE_PROMPTS, PromptEditor
 from clipshow.workers.analysis_worker import AnalysisWorker
 
 # Slider scale: sliders are 0-100 integers, mapped to 0.0-1.0 floats
@@ -347,24 +347,50 @@ class AnalyzePanel(QWidget):
         self.threshold_label.setText(f"{value}%")
 
     def _open_prompt_editor(self) -> None:
-        """Open a dialog with the PromptEditor widget."""
+        """Open a dialog with positive and negative prompt editors."""
         dlg = QDialog(self)
         dlg.setWindowTitle("Edit Semantic Prompts")
-        dlg.setMinimumSize(400, 300)
+        dlg.setMinimumSize(600, 400)
         layout = QVBoxLayout(dlg)
 
-        editor = PromptEditor(self.settings.semantic_prompts)
-        layout.addWidget(editor)
+        # Two editors side by side
+        columns = QHBoxLayout()
+
+        pos_col = QVBoxLayout()
+        pos_col.addWidget(QLabel("Positive Prompts (what to look for):"))
+        pos_editor = PromptEditor(self.settings.semantic_prompts)
+        pos_col.addWidget(pos_editor)
+        columns.addLayout(pos_col)
+
+        neg_col = QVBoxLayout()
+        neg_col.addWidget(QLabel("Negative Prompts (what to ignore):"))
+        neg_editor = PromptEditor(
+            self.settings.semantic_negative_prompts,
+            default_prompts=DEFAULT_NEGATIVE_PROMPTS,
+        )
+        neg_col.addWidget(neg_editor)
+        columns.addLayout(neg_col)
+
+        layout.addLayout(columns)
+
+        # Clear All button + dialog buttons
+        btn_row = QHBoxLayout()
+        clear_all_btn = QPushButton("Clear All")
+        clear_all_btn.clicked.connect(lambda: (pos_editor.clear_all(), neg_editor.clear_all()))
+        btn_row.addWidget(clear_all_btn)
+        btn_row.addStretch()
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
-        layout.addWidget(buttons)
+        btn_row.addWidget(buttons)
+        layout.addLayout(btn_row)
 
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.settings.semantic_prompts = editor.prompts
+            self.settings.semantic_prompts = pos_editor.prompts
+            self.settings.semantic_negative_prompts = neg_editor.prompts
 
     def _populate_file_list(self) -> None:
         """Fill the file list with source filenames and pending status."""

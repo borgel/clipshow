@@ -2,7 +2,7 @@
 
 import pytest
 
-from clipshow.ui.prompt_editor import DEFAULT_PROMPTS, PromptEditor
+from clipshow.ui.prompt_editor import DEFAULT_NEGATIVE_PROMPTS, DEFAULT_PROMPTS, PromptEditor
 
 
 @pytest.fixture()
@@ -98,3 +98,42 @@ class TestInlineEdit:
         # Try to set it to the same text as another prompt
         item.setText(DEFAULT_PROMPTS[1])
         assert editor.prompts[0] == original
+
+
+class TestClearAll:
+    def test_clear_all_empties_list(self, editor, qtbot):
+        with qtbot.waitSignal(editor.prompts_changed, timeout=1000):
+            editor.clear_all()
+        assert editor.prompts == []
+        assert editor.list_widget.count() == 0
+
+    def test_clear_all_on_already_empty(self, qtbot):
+        w = PromptEditor(prompts=[])
+        qtbot.addWidget(w)
+        w.clear_all()
+        assert w.prompts == []
+
+
+class TestCustomDefaults:
+    def test_custom_default_prompts(self, qtbot):
+        custom_defaults = ["alpha", "beta"]
+        w = PromptEditor(default_prompts=custom_defaults)
+        qtbot.addWidget(w)
+        assert w.prompts == custom_defaults
+
+    def test_reset_uses_custom_defaults(self, qtbot):
+        custom_defaults = ["alpha", "beta"]
+        w = PromptEditor(prompts=["gamma"], default_prompts=custom_defaults)
+        qtbot.addWidget(w)
+        w.reset_button.click()
+        assert w.prompts == custom_defaults
+
+    def test_negative_prompts_defaults_exist(self):
+        assert len(DEFAULT_NEGATIVE_PROMPTS) > 0
+
+    def test_negative_editor_with_defaults(self, qtbot):
+        w = PromptEditor(default_prompts=DEFAULT_NEGATIVE_PROMPTS)
+        qtbot.addWidget(w)
+        assert w.prompts == DEFAULT_NEGATIVE_PROMPTS
+        w.reset_button.click()
+        assert w.prompts == DEFAULT_NEGATIVE_PROMPTS

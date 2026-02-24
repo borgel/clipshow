@@ -19,6 +19,13 @@ DEFAULT_PROMPTS = [
     "beautiful scenery",
 ]
 
+DEFAULT_NEGATIVE_PROMPTS = [
+    "boring static shot",
+    "blank wall",
+    "empty room",
+    "black screen",
+]
+
 
 class PromptEditor(QWidget):
     """Editable list of semantic text prompts.
@@ -33,9 +40,11 @@ class PromptEditor(QWidget):
         self,
         prompts: list[str] | None = None,
         parent: QWidget | None = None,
+        default_prompts: list[str] | None = None,
     ):
         super().__init__(parent)
-        self._prompts: list[str] = list(prompts or DEFAULT_PROMPTS)
+        self._default_prompts = list(default_prompts or DEFAULT_PROMPTS)
+        self._prompts: list[str] = list(prompts or self._default_prompts)
         self._setup_ui()
         self._connect_signals()
         self._refresh_list()
@@ -97,7 +106,13 @@ class PromptEditor(QWidget):
             self.prompts_changed.emit(list(self._prompts))
 
     def _on_reset(self) -> None:
-        self._prompts = list(DEFAULT_PROMPTS)
+        self._prompts = list(self._default_prompts)
+        self._refresh_list()
+        self.prompts_changed.emit(list(self._prompts))
+
+    def clear_all(self) -> None:
+        """Remove all prompts from the list."""
+        self._prompts.clear()
         self._refresh_list()
         self.prompts_changed.emit(list(self._prompts))
 

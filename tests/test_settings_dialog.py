@@ -55,6 +55,9 @@ class TestInitialValues:
     def test_prompt_editor_matches(self, dialog, settings):
         assert dialog.prompt_editor.prompts == settings.semantic_prompts
 
+    def test_negative_prompt_editor_matches(self, dialog, settings):
+        assert dialog.negative_prompt_editor.prompts == settings.semantic_negative_prompts
+
 
 class TestSliderChanges:
     def test_weight_slider_updates_label(self, dialog):
@@ -106,6 +109,13 @@ class TestSave:
         settings.save = lambda path=None: None
         dialog._on_save()
         assert "custom prompt" in settings.semantic_prompts
+
+    def test_save_applies_negative_prompts(self, dialog, settings):
+        dialog.negative_prompt_editor.line_edit.setText("custom negative")
+        dialog.negative_prompt_editor.add_button.click()
+        settings.save = lambda path=None: None
+        dialog._on_save()
+        assert "custom negative" in settings.semantic_negative_prompts
 
 
 class TestCancel:
