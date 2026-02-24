@@ -17,6 +17,7 @@ class Settings:
     motion_weight: float = 0.0
     semantic_weight: float = 0.0
     emotion_weight: float = 0.0
+    audiovisual_weight: float = 0.0
 
     # Semantic detector prompts
     semantic_prompts: list[str] = field(
@@ -80,6 +81,7 @@ class Settings:
             "motion": self.motion_weight,
             "semantic": self.semantic_weight,
             "emotion": self.emotion_weight,
+            "audiovisual": self.audiovisual_weight,
         }
 
     @property

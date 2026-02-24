@@ -40,6 +40,12 @@ def _get_optional_detector(name: str) -> type[Detector] | None:
             return EmotionDetector
         except ImportError:
             return None
+    elif name == "audiovisual":
+        try:
+            from clipshow.detection.audiovisual import AudioVisualDetector
+            return AudioVisualDetector
+        except ImportError:
+            return None
     return None
 
 
