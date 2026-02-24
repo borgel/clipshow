@@ -106,7 +106,7 @@ class ReviewPanel(QWidget):
             seg.end_time = max(seg.start_time + 0.1, seg.end_time + delta)
         self.segment_list._rebuild_list()
         # Restore selection after rebuild
-        self.segment_list.list_widget.setCurrentRow(idx)
+        self.segment_list.table_widget.selectRow(idx)
         self._update_trim_label()
         self.segments_modified.emit()
 

@@ -156,7 +156,7 @@ class TestRealVideoWorkflow:
             assert seg.end_time > seg.start_time
 
         # Select first segment and verify trim controls work
-        window.review_panel.segment_list.list_widget.setCurrentRow(0)
+        window.review_panel.segment_list.table_widget.selectRow(0)
         original_end = segments[0].end_time
         window.review_panel._nudge_trim("end", -0.5)
         assert segments[0].end_time == pytest.approx(original_end - 0.5)

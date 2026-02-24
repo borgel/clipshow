@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         self.next_button.clicked.connect(self._go_next)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.import_panel.files_changed.connect(self._on_files_changed)
+        self.analyze_panel.analysis_started.connect(self._on_analysis_started)
         self.analyze_panel.analysis_complete.connect(self._on_analysis_complete)
         self.review_panel.segments_modified.connect(self._on_segments_modified)
 
@@ -105,6 +106,11 @@ class MainWindow(QMainWindow):
         elif index == 0:
             # On import tab, Next depends on whether files are loaded
             self.next_button.setEnabled(self.import_panel.file_count > 0)
+        elif index == 1:
+            # On analyze tab, Next requires completed analysis results
+            self.next_button.setEnabled(
+                self.analyze_panel.has_results and not self.analyze_panel.is_analyzing
+            )
         else:
             self.next_button.setEnabled(True)
 
@@ -113,13 +119,22 @@ class MainWindow(QMainWindow):
         if self.tabs.currentIndex() == 0:
             self.next_button.setEnabled(self.import_panel.file_count > 0)
 
+    def _on_analysis_started(self) -> None:
+        """Disable Next while analysis is running."""
+        if self.tabs.currentIndex() == 1:
+            self.next_button.setEnabled(False)
+
     def _on_analysis_complete(self, moments: list) -> None:
         """Convert detected moments to highlight segments and pass to review."""
         segments = [
             HighlightSegment.from_moment(m, order=i) for i, m in enumerate(moments)
         ]
+        segments.sort(key=lambda s: (s.source_path, s.start_time))
         self.review_panel.set_segments(segments)
         self.export_panel.set_segments(segments)
+        # Re-enable Next now that results are available
+        if self.tabs.currentIndex() == 1:
+            self.next_button.setEnabled(True)
 
     def _on_segments_modified(self) -> None:
         """Sync segment changes from review to export panel."""

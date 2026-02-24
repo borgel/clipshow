@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -13,9 +15,13 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSlider,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -28,11 +34,17 @@ from clipshow.workers.analysis_worker import AnalysisWorker
 # Slider scale: sliders are 0-100 integers, mapped to 0.0-1.0 floats
 SLIDER_SCALE = 100
 
+# Status markers for the file list
+_PENDING = "\u2500"  # dash
+_ANALYZING = "\u25B6"  # play triangle
+_COMPLETE = "\u2714"  # checkmark
+
 
 class AnalyzePanel(QWidget):
     """Panel for configuring detectors and running analysis."""
 
     analysis_complete = Signal(list)  # list[DetectedMoment]
+    analysis_started = Signal()
 
     def __init__(
         self,
@@ -46,16 +58,33 @@ class AnalyzePanel(QWidget):
         self._worker: AnalysisWorker | None = None
         self._total_files: int = 0
         self._completed_files: int = 0
+        self._has_results: bool = False
+        self._analysis_start_time: float = 0.0
+        self._total_video_duration: float = 0.0
+        self._source_paths: list[str] = []
+        self._file_progress: dict[str, float] = {}
+        self._analyzing_paths: set[str] = set()
         self._setup_ui()
         self._connect_signals()
         self._load_settings()
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        layout.addWidget(splitter)
+
+        # --- Top: settings in a scroll area ---
+        settings_widget = QWidget()
+        settings_layout = QVBoxLayout(settings_widget)
+        settings_layout.setContentsMargins(4, 4, 4, 4)
 
         # Detector weights group
         weights_group = QGroupBox("Detector Weights")
         weights_layout = QFormLayout()
+        weights_layout.setContentsMargins(6, 6, 6, 6)
+        weights_layout.setVerticalSpacing(4)
 
         self.scene_check = QCheckBox()
         self.scene_slider = QSlider(Qt.Orientation.Horizontal)
@@ -109,12 +138,28 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.emotion_label)
         weights_layout.addRow("Emotion:", row)
 
+        self.auto_balance_check = QCheckBox("Auto-balance weights")
+        self.auto_balance_check.setToolTip(
+            "Divide 100% evenly among enabled detectors"
+        )
+        weights_layout.addRow(self.auto_balance_check)
+
+        weights_help = QLabel(
+            "Control how much each detector contributes to the highlight score. "
+            "Higher weight = more influence."
+        )
+        weights_help.setWordWrap(True)
+        weights_help.setStyleSheet("color: gray;")
+        weights_layout.addRow(weights_help)
+
         weights_group.setLayout(weights_layout)
-        layout.addWidget(weights_group)
+        settings_layout.addWidget(weights_group)
 
         # Threshold slider
         threshold_group = QGroupBox("Threshold")
         threshold_layout = QFormLayout()
+        threshold_layout.setContentsMargins(6, 6, 6, 6)
+        threshold_layout.setVerticalSpacing(4)
 
         self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
         self.threshold_slider.setRange(0, SLIDER_SCALE)
@@ -124,17 +169,55 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.threshold_label)
         threshold_layout.addRow("Score threshold:", row)
 
-        threshold_group.setLayout(threshold_layout)
-        layout.addWidget(threshold_group)
+        threshold_help = QLabel(
+            "Minimum combined score for a moment to become a highlight. "
+            "Lower = more highlights, higher = only the best."
+        )
+        threshold_help.setWordWrap(True)
+        threshold_help.setStyleSheet("color: gray;")
+        threshold_layout.addRow(threshold_help)
 
-        # Status and progress section
+        threshold_group.setLayout(threshold_layout)
+        settings_layout.addWidget(threshold_group)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(settings_widget)
+        splitter.addWidget(scroll)
+
+        # --- Bottom: progress area with file list ---
+        progress_widget = QWidget()
+        progress_layout = QVBoxLayout(progress_widget)
+        progress_layout.setContentsMargins(4, 4, 4, 4)
+
+        # Status and progress bar
         self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
+        progress_layout.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.hide()
-        layout.addWidget(self.progress_bar)
+        progress_layout.addWidget(self.progress_bar)
+
+        # File status list + frame preview side by side
+        file_preview_splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        self.file_list = QListWidget()
+        self.file_list.setAlternatingRowColors(True)
+        file_preview_splitter.addWidget(self.file_list)
+
+        self.frame_preview_label = QLabel()
+        self.frame_preview_label.setMinimumSize(160, 90)
+        self.frame_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.frame_preview_label.setScaledContents(True)
+        self.frame_preview_label.setStyleSheet("background: black;")
+        file_preview_splitter.addWidget(self.frame_preview_label)
+
+        file_preview_splitter.setStretchFactor(0, 1)
+        file_preview_splitter.setStretchFactor(1, 1)
+
+        progress_layout.addWidget(file_preview_splitter, stretch=1)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -144,9 +227,13 @@ class AnalyzePanel(QWidget):
         btn_layout.addStretch()
         btn_layout.addWidget(self.analyze_button)
         btn_layout.addWidget(self.cancel_button)
-        layout.addLayout(btn_layout)
+        progress_layout.addLayout(btn_layout)
 
-        layout.addStretch()
+        splitter.addWidget(progress_widget)
+
+        # Give both halves equal starting weight
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
 
     def _connect_signals(self) -> None:
         self.scene_check.toggled.connect(lambda on: self._on_check_toggled("scene", on))
@@ -176,6 +263,7 @@ class AnalyzePanel(QWidget):
         )
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
 
+        self.auto_balance_check.toggled.connect(self._on_auto_balance_toggled)
         self.edit_prompts_button.clicked.connect(self._open_prompt_editor)
         self.analyze_button.clicked.connect(self.start_analysis)
         self.cancel_button.clicked.connect(self.cancel_analysis)
@@ -197,11 +285,50 @@ class AnalyzePanel(QWidget):
         self.semantic_check.setChecked(self.settings.semantic_weight > 0)
         self.emotion_check.setChecked(self.settings.emotion_weight > 0)
 
+    _DETECTOR_NAMES = ("scene", "audio", "motion", "semantic", "emotion")
+
     def _on_check_toggled(self, detector: str, enabled: bool) -> None:
         slider = getattr(self, f"{detector}_slider")
-        slider.setEnabled(enabled)
+        if self.auto_balance_check.isChecked():
+            # In auto-balance mode, sliders stay disabled; rebalance all
+            slider.setEnabled(False)
+            if not enabled:
+                slider.setValue(0)
+            self._rebalance_weights()
+        else:
+            slider.setEnabled(enabled)
+            if not enabled:
+                slider.setValue(0)
+
+    def _on_auto_balance_toggled(self, enabled: bool) -> None:
+        """Toggle auto-balance mode for detector weights."""
+        if enabled:
+            self._rebalance_weights()
+        # Enable/disable sliders for checked detectors
+        for name in self._DETECTOR_NAMES:
+            check = getattr(self, f"{name}_check")
+            slider = getattr(self, f"{name}_slider")
+            if enabled:
+                slider.setEnabled(False)
+            else:
+                slider.setEnabled(check.isChecked())
+
+    def _rebalance_weights(self) -> None:
+        """Set all enabled detector sliders to equal share of 100."""
+        enabled = [
+            name
+            for name in self._DETECTOR_NAMES
+            if getattr(self, f"{name}_check").isChecked()
+        ]
         if not enabled:
-            slider.setValue(0)
+            return
+        per_detector = SLIDER_SCALE // len(enabled)
+        for name in self._DETECTOR_NAMES:
+            slider = getattr(self, f"{name}_slider")
+            if name in enabled:
+                slider.setValue(per_detector)
+            else:
+                slider.setValue(0)
 
     def _on_slider_changed(self, detector: str, value: int) -> None:
         weight = value / SLIDER_SCALE
@@ -233,6 +360,29 @@ class AnalyzePanel(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self.settings.semantic_prompts = editor.prompts
 
+    def _populate_file_list(self) -> None:
+        """Fill the file list with source filenames and pending status."""
+        self.file_list.clear()
+        for path in self._source_paths:
+            name = Path(path).name
+            item = QListWidgetItem(f"{_PENDING}  {name}")
+            item.setForeground(Qt.GlobalColor.gray)
+            self.file_list.addItem(item)
+
+    def _update_file_status(self, index: int, marker: str) -> None:
+        """Update a single file's status marker and color in the list."""
+        if index < 0 or index >= self.file_list.count():
+            return
+        item = self.file_list.item(index)
+        name = Path(self._source_paths[index]).name
+        item.setText(f"{marker}  {name}")
+        if marker == _COMPLETE:
+            item.setForeground(Qt.GlobalColor.darkGreen)
+        elif marker == _ANALYZING:
+            item.setForeground(Qt.GlobalColor.white)
+        else:
+            item.setForeground(Qt.GlobalColor.gray)
+
     def start_analysis(self) -> None:
         """Launch the analysis worker thread."""
         if not self.project.sources:
@@ -240,6 +390,13 @@ class AnalyzePanel(QWidget):
 
         self._total_files = len(self.project.sources)
         self._completed_files = 0
+        self._analysis_start_time = time.monotonic()
+        self._total_video_duration = sum(s.duration for s in self.project.sources)
+        self._source_paths = [s.path for s in self.project.sources]
+        self._file_progress = {}
+        self._analyzing_paths = set()
+
+        self._populate_file_list()
 
         video_paths = [(s.path, s.duration) for s in self.project.sources]
         self._worker = AnalysisWorker(video_paths, self.settings)
@@ -248,6 +405,7 @@ class AnalyzePanel(QWidget):
         self._worker.all_complete.connect(self._on_all_complete)
         self._worker.error.connect(self._on_error)
         self._worker.status.connect(self._on_status)
+        self._worker.frame_preview.connect(self._on_frame_preview)
 
         n = self._total_files
         self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
@@ -255,7 +413,9 @@ class AnalyzePanel(QWidget):
         self.progress_bar.show()
         self.analyze_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+
         self._worker.start()
+        self.analysis_started.emit()
 
     def cancel_analysis(self) -> None:
         """Request cancellation of the running worker."""
@@ -266,22 +426,77 @@ class AnalyzePanel(QWidget):
     def _on_status(self, message: str) -> None:
         self.status_label.setText(message)
 
+    @staticmethod
+    def _format_eta(seconds: float) -> str:
+        """Format seconds into a human-readable ETA string."""
+        if seconds < 60:
+            return f"~{int(seconds)}s remaining"
+        minutes = int(seconds) // 60
+        secs = int(seconds) % 60
+        return f"~{minutes}m {secs:02d}s remaining"
+
     def _on_progress(self, source_path: str, fraction: float) -> None:
-        # Overall progress = (completed files + current file fraction) / total files
-        overall = (self._completed_files + fraction) / self._total_files
+        # Track per-file progress
+        self._file_progress[source_path] = fraction
+
+        # Mark file as analyzing in list on first progress
+        if source_path not in self._analyzing_paths:
+            self._analyzing_paths.add(source_path)
+            try:
+                idx = self._source_paths.index(source_path)
+                self._update_file_status(idx, _ANALYZING)
+            except ValueError:
+                pass
+
+        # Overall progress = sum of all per-file fractions / total files
+        overall = sum(self._file_progress.values()) / self._total_files
         self.progress_bar.setValue(int(overall * 100))
-        basename = Path(source_path).name
-        self.status_label.setText(
-            f"Analyzing {basename} "
-            f"({self._completed_files + 1} of {self._total_files})..."
-        )
+
+        # Compute rate and ETA
+        elapsed = time.monotonic() - self._analysis_start_time
+        rate_str = ""
+        eta_str = ""
+        if elapsed > 1.0 and overall > 0.01:
+            processed_duration = self._total_video_duration * overall
+            rate = processed_duration / elapsed
+            rate_str = f"{rate:.1f}x realtime"
+            eta = elapsed * (1 - overall) / overall
+            eta_str = self._format_eta(eta)
+
+        active = len(self._analyzing_paths) - self._completed_files
+        if active <= 1:
+            basename = Path(source_path).name
+            desc = (
+                f"Analyzing {basename} "
+                f"({self._completed_files + 1} of {self._total_files})"
+            )
+        else:
+            desc = f"Analyzing {active} of {self._total_files} clips"
+
+        parts = [desc]
+        if rate_str:
+            parts.append(f"\u2014 {rate_str}, {eta_str}")
+        self.status_label.setText(" ".join(parts))
 
     def _on_file_complete(self, source_path: str) -> None:
+        # Mark completed in file list
+        self._file_progress[source_path] = 1.0
         self._completed_files += 1
+        try:
+            idx = self._source_paths.index(source_path)
+            self._update_file_status(idx, _COMPLETE)
+        except ValueError:
+            pass
+
         basename = Path(source_path).name
         self.status_label.setText(
             f"Completed {basename} ({self._completed_files} of {self._total_files})"
         )
+
+    def _on_frame_preview(self, image: QImage) -> None:
+        """Display a frame thumbnail from the analysis worker."""
+        pixmap = QPixmap.fromImage(image)
+        self.frame_preview_label.setPixmap(pixmap)
 
     def _on_all_complete(self, moments: list) -> None:
         n = self._total_files
@@ -294,6 +509,7 @@ class AnalyzePanel(QWidget):
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
+        self._has_results = True
         self.analysis_complete.emit(moments)
 
     def _on_error(self, message: str) -> None:
@@ -302,6 +518,10 @@ class AnalyzePanel(QWidget):
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
+
+    @property
+    def has_results(self) -> bool:
+        return self._has_results
 
     @property
     def is_analyzing(self) -> bool:
