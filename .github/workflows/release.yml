@@ -116,12 +116,13 @@ jobs:
       - name: Build Flatpak
         run: |
           flatpak-builder --user --force-clean \
+            --repo=repo \
             build-dir packaging/com.clipshow.app.yml
 
       - name: Bundle Flatpak
         run: |
           flatpak build-bundle \
-            ~/.local/share/flatpak/repo \
+            repo \
             "ClipShow-${{ github.ref_name }}-linux.flatpak" \
             com.clipshow.app
 
