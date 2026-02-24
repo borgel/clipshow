@@ -112,7 +112,7 @@ class TestFullWorkflow:
         window._on_analysis_complete(moments)
 
         # Select a segment and trim directly
-        window.review_panel.segment_list.list_widget.setCurrentRow(0)
+        window.review_panel.segment_list.table_widget.selectRow(0)
         window.review_panel._nudge_trim("end", 0.5)
 
         # Verify the segment was modified
@@ -129,9 +129,8 @@ class TestFullWorkflow:
         window._on_analysis_complete(moments)
 
         # Uncheck first segment
-        item = window.review_panel.segment_list.list_widget.item(0)
-        widget = window.review_panel.segment_list.list_widget.itemWidget(item)
-        widget.checkbox.setChecked(False)
+        cb = window.review_panel.segment_list.include_checkbox(0)
+        cb.setChecked(False)
 
         assert "1 segments" in window.export_panel.summary_label.text()
 
