@@ -169,7 +169,7 @@ class TestGlobExpansion:
         (tmp_path / "video.mp4").touch()
         cfg_file = tmp_path / "pipeline.yaml"
         abs_pattern = str(tmp_path / "*.mp4")
-        cfg_file.write_text(f'inputs:\n  - "{abs_pattern}"\n')
+        cfg_file.write_text(f"inputs:\n  - '{abs_pattern}'\n")
         cfg = load_pipeline_config(cfg_file)
 
         assert len(cfg.inputs) == 1

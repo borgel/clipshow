@@ -12,8 +12,6 @@ import logging
 import urllib.request
 from pathlib import Path
 
-import onnxruntime as ort
-
 logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY: dict[str, dict] = {
@@ -84,12 +82,16 @@ class ModelManager:
 
     def load_session(self, name: str, **kwargs):
         """Load an ONNX Runtime session for a model."""
+        import onnxruntime as ort
+
         path = self.ensure_model(name)
         providers = self._get_providers()
         return ort.InferenceSession(str(path), providers=providers)
 
     def _get_providers(self) -> list[str]:
         """Detect available execution providers, prefer GPU."""
+        import onnxruntime as ort
+
         available = ort.get_available_providers()
         preferred = [
             "CUDAExecutionProvider",
