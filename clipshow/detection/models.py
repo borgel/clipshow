@@ -8,7 +8,13 @@ selects the best available execution provider (CUDA > CoreML > CPU).
 
 from __future__ import annotations
 
+import logging
+import urllib.request
 from pathlib import Path
+
+import onnxruntime as ort
+
+logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY: dict[str, dict] = {
     # Phase 3: SigLIP upgrade
@@ -37,11 +43,7 @@ MODEL_REGISTRY: dict[str, dict] = {
 
 
 class ModelManager:
-    """Download, cache, and load ONNX models.
-
-    Stub — tests define the interface (TDD red phase).
-    Implementation in clipshow-hph will make tests pass (green).
-    """
+    """Download, cache, and load ONNX models."""
 
     cache_dir: Path = Path.home() / ".clipshow" / "models"
 
@@ -51,12 +53,47 @@ class ModelManager:
 
     def ensure_model(self, name: str, progress_cb=None) -> Path:
         """Download model if not cached, return local path."""
-        raise NotImplementedError
+        if name not in MODEL_REGISTRY:
+            raise KeyError(f"Unknown model: {name!r}")
+
+        meta = MODEL_REGISTRY[name]
+        model_path = self.cache_dir / meta["file"]
+
+        # Skip download if file exists and is non-empty
+        if model_path.exists() and model_path.stat().st_size > 0:
+            return model_path
+
+        # Ensure cache directory exists
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Bridge urlretrieve's reporthook to user's progress_cb
+        reporthook = None
+        if progress_cb is not None:
+
+            def reporthook(block_num, block_size, total_size):
+                if total_size > 0:
+                    progress = min(1.0, (block_num * block_size) / total_size)
+                else:
+                    progress = 0.0
+                progress_cb(progress)
+
+        logger.info("Downloading model %r to %s", name, model_path)
+        urllib.request.urlretrieve(meta["url"], str(model_path), reporthook=reporthook)
+
+        return model_path
 
     def load_session(self, name: str, **kwargs):
         """Load an ONNX Runtime session for a model."""
-        raise NotImplementedError
+        path = self.ensure_model(name)
+        providers = self._get_providers()
+        return ort.InferenceSession(str(path), providers=providers)
 
     def _get_providers(self) -> list[str]:
         """Detect available execution providers, prefer GPU."""
-        raise NotImplementedError
+        available = ort.get_available_providers()
+        preferred = [
+            "CUDAExecutionProvider",
+            "CoreMLExecutionProvider",
+            "CPUExecutionProvider",
+        ]
+        return [p for p in preferred if p in available]
