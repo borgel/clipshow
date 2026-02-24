@@ -12,11 +12,15 @@ finish-args:
   - --socket=pulseaudio
   - --filesystem=home
 
+build-options:
+  build-args:
+    - --share=network
+
 modules:
   - name: python3-clipshow
     buildsystem: simple
     build-commands:
-      - pip3 install --no-index --find-links=vendor --prefix=/app .
+      - pip3 install --prefix=/app .
     sources:
       - type: dir
         path: ..
