@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        variant: [lite, full]
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[test]"
+          pip install -e ".[all,test]"
           pip install pyinstaller
 
       - name: Run tests
@@ -34,6 +37,8 @@ jobs:
 
       - name: Build macOS app bundle
         run: pyinstaller packaging/clipshow_macos.spec --noconfirm
+        env:
+          CLIPSHOW_BUNDLE_MODELS: ${{ matrix.variant == 'full' && '1' || '0' }}
 
       - name: Create DMG
         run: |
@@ -45,17 +50,20 @@ jobs:
             --icon-size 100 \
             --icon "ClipShow.app" 150 190 \
             --app-drop-link 450 190 \
-            "dist/ClipShow-${{ github.ref_name }}-macos.dmg" \
+            "dist/ClipShow-${{ github.ref_name }}-macos-${{ matrix.variant }}.dmg" \
             "dist/ClipShow.app" || true
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipShow-macos
+          name: ClipShow-macos-${{ matrix.variant }}
           path: dist/ClipShow-*.dmg
 
   build-windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        variant: [lite, full]
     steps:
       - uses: actions/checkout@v4
 
@@ -69,7 +77,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[test]"
+          pip install -e ".[all,test]"
           pip install pyinstaller
 
       - name: Run tests
@@ -79,16 +87,26 @@ jobs:
 
       - name: Build Windows executable
         run: pyinstaller packaging/clipshow_windows.spec --noconfirm
+        env:
+          CLIPSHOW_BUNDLE_MODELS: ${{ matrix.variant == 'full' && '1' || '0' }}
 
       - name: Build Inno Setup installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
         with:
           path: packaging/installer.iss
 
+      - name: Rename installer for variant
+        shell: bash
+        run: |
+          cd packaging/Output
+          for f in ClipShow-*-setup.exe; do
+            mv "$f" "${f%-setup.exe}-${{ matrix.variant }}-setup.exe"
+          done
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipShow-windows
+          name: ClipShow-windows-${{ matrix.variant }}
           path: packaging/Output/ClipShow-*-setup.exe
 
   build-linux:
@@ -135,18 +153,32 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Download macOS artifact
+      - name: Download macOS lite artifact
         if: needs.build-macos.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: ClipShow-macos
+          name: ClipShow-macos-lite
           path: artifacts/
 
-      - name: Download Windows artifact
+      - name: Download macOS full artifact
+        if: needs.build-macos.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ClipShow-macos-full
+          path: artifacts/
+
+      - name: Download Windows lite artifact
         if: needs.build-windows.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: ClipShow-windows
+          name: ClipShow-windows-lite
+          path: artifacts/
+
+      - name: Download Windows full artifact
+        if: needs.build-windows.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ClipShow-windows-full
           path: artifacts/
 
       - name: Download Linux artifact

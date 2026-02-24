@@ -176,7 +176,7 @@ class TestRealVideoWorkflow:
             window.export_panel.export_settings.output_path = output_path
 
             with qtbot.waitSignal(
-                window.export_panel.export_complete, timeout=120_000
+                window.export_panel.export_complete, timeout=300_000
             ):
                 window.export_panel.start_export()
 

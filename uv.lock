@@ -179,6 +179,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "onnx-clip" },
+    { name = "onnxruntime" },
+]
 emotion = [
     { name = "deepface" },
     { name = "mediapipe" },
@@ -203,7 +207,9 @@ requires-dist = [
     { name = "mediapipe", marker = "extra == 'emotion'" },
     { name = "moviepy", specifier = ">=2.0" },
     { name = "numpy", specifier = ">=1.24" },
+    { name = "onnx-clip", marker = "extra == 'all'" },
     { name = "onnx-clip", marker = "extra == 'semantic'" },
+    { name = "onnxruntime", marker = "extra == 'all'" },
     { name = "onnxruntime", marker = "extra == 'semantic'" },
     { name = "opencv-python-headless", specifier = ">=4.8" },
     { name = "pyside6", specifier = ">=6.6" },
@@ -215,7 +221,7 @@ requires-dist = [
     { name = "scenedetect", extras = ["opencv"], specifier = ">=0.6.2" },
     { name = "scikit-image", marker = "extra == 'test'", specifier = ">=0.21" },
 ]
-provides-extras = ["semantic", "emotion", "test"]
+provides-extras = ["semantic", "emotion", "all", "test"]
 
 [[package]]
 name = "colorama"

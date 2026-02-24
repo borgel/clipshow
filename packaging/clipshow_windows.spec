@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for ClipShow Windows folder-mode build."""
 
+import os
+
 block_cipher = None
 
 # Collect scenedetect submodules which use lazy imports
@@ -25,14 +27,34 @@ pyside6_hiddenimports = [
     "PySide6.QtNetwork",
 ]
 
+# Semantic detector lazy imports
+semantic_hiddenimports = [
+    "onnx_clip",
+    "onnxruntime",
+    "onnxruntime.capi",
+    "onnxruntime.capi.onnxruntime_pybind11_state",
+    "PIL",
+    "PIL.Image",
+    "scipy",
+    "scipy.ndimage",
+]
+
+# Collect onnx_clip model data only for "full" builds
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+
+bundle_models = os.environ.get("CLIPSHOW_BUNDLE_MODELS", "0") == "1"
+onnx_clip_datas = collect_data_files("onnx_clip") if bundle_models else []
+onnxruntime_binaries = collect_dynamic_libs("onnxruntime")
+
 a = Analysis(
     ["../clipshow/__main__.py"],
     pathex=[],
-    binaries=[],
-    datas=[],
+    binaries=[*onnxruntime_binaries],
+    datas=[*onnx_clip_datas],
     hiddenimports=[
         *scenedetect_hiddenimports,
         *pyside6_hiddenimports,
+        *semantic_hiddenimports,
         "cv2",
         "numpy",
         "moviepy",

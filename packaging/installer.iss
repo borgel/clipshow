@@ -2,11 +2,11 @@
 
 [Setup]
 AppName=ClipShow
-AppVersion=0.1.0
+AppVersion=0.3.0
 AppPublisher=ClipShow Contributors
 DefaultDirName={autopf}\ClipShow
 DefaultGroupName=ClipShow
-OutputBaseFilename=ClipShow-0.1.0-setup
+OutputBaseFilename=ClipShow-0.3.0-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
