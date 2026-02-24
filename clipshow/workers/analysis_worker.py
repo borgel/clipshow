@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+import threading
 import time
 from pathlib import Path as _Path
 
@@ -21,6 +23,10 @@ _PREVIEW_HEIGHT = 180
 
 class AnalysisWorker(QThread):
     """Runs detection pipeline in a background thread.
+
+    Uses ThreadPoolExecutor to analyze multiple videos concurrently when
+    max_workers > 1.  Each pool thread gets its own DetectionPipeline
+    instance and emits per-file progress signals so the UI stays granular.
 
     Signals:
         progress: (source_path, fraction 0-1)
@@ -49,6 +55,7 @@ class AnalysisWorker(QThread):
         self.settings = settings or Settings()
         self._cancelled = False
         self._last_preview_time = 0.0
+        self._preview_lock = threading.Lock()
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -75,40 +82,82 @@ class AnalysisWorker(QThread):
         finally:
             cap.release()
 
+    def _maybe_emit_preview(self, path: str, duration: float, fraction: float) -> None:
+        """Emit a frame preview if enough time has passed (thread-safe)."""
+        now = time.monotonic()
+        with self._preview_lock:
+            if now - self._last_preview_time < _FRAME_PREVIEW_INTERVAL:
+                return
+            self._last_preview_time = now
+        timestamp = fraction * duration
+        img = self._extract_frame(path, timestamp)
+        if img is not None:
+            self.frame_preview.emit(img)
+
+    def _analyze_one(self, path: str, duration: float) -> list[DetectedMoment]:
+        """Analyze a single video — safe to call from any thread."""
+        pipeline = DetectionPipeline(self.settings)
+
+        def on_progress(p: float) -> None:
+            self.progress.emit(path, p)
+            self._maybe_emit_preview(path, duration, p)
+
+        return pipeline.analyze_video(
+            path,
+            video_duration=duration,
+            progress_callback=on_progress,
+            cancel_flag=self._is_cancelled,
+        )
+
     def run(self) -> None:
         try:
-            pipeline = DetectionPipeline(self.settings)
             all_moments: list[DetectedMoment] = []
+            max_workers = self.settings.resolved_max_workers
+            max_workers = min(max_workers, len(self.video_paths))
 
-            for i, (path, duration) in enumerate(self.video_paths):
-                if self._cancelled:
-                    break
-
-                basename = _Path(path).name
-                self.status.emit(f"Analyzing {basename}...")
-
-                def on_progress(p: float, _path=path, _dur=duration) -> None:
-                    self.progress.emit(_path, p)
-                    # Throttled frame preview
-                    now = time.monotonic()
-                    if now - self._last_preview_time >= _FRAME_PREVIEW_INTERVAL:
-                        self._last_preview_time = now
-                        timestamp = p * _dur
-                        img = self._extract_frame(_path, timestamp)
-                        if img is not None:
-                            self.frame_preview.emit(img)
-
-                moments = pipeline.analyze_video(
-                    path,
-                    video_duration=duration,
-                    progress_callback=on_progress,
-                    cancel_flag=self._is_cancelled,
-                )
-                all_moments.extend(moments)
-                self.file_complete.emit(path)
+            if max_workers <= 1 or len(self.video_paths) <= 1:
+                self._run_sequential(all_moments)
+            else:
+                self._run_parallel(all_moments, max_workers)
 
             all_moments.sort(key=lambda m: m.peak_score, reverse=True)
             self.all_complete.emit(all_moments)
 
         except Exception as e:
             self.error.emit(str(e))
+
+    def _run_sequential(self, all_moments: list[DetectedMoment]) -> None:
+        for path, duration in self.video_paths:
+            if self._cancelled:
+                break
+            basename = _Path(path).name
+            self.status.emit(f"Analyzing {basename}...")
+            moments = self._analyze_one(path, duration)
+            all_moments.extend(moments)
+            self.file_complete.emit(path)
+
+    def _run_parallel(
+        self, all_moments: list[DetectedMoment], max_workers: int
+    ) -> None:
+        n = len(self.video_paths)
+        self.status.emit(f"Analyzing {n} videos in parallel...")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path: dict[concurrent.futures.Future, str] = {}
+            for path, duration in self.video_paths:
+                future = executor.submit(self._analyze_one, path, duration)
+                future_to_path[future] = path
+
+            for future in concurrent.futures.as_completed(future_to_path):
+                if self._cancelled:
+                    for f in future_to_path:
+                        f.cancel()
+                    break
+                path = future_to_path[future]
+                try:
+                    moments = future.result()
+                except Exception as exc:
+                    self.error.emit(f"{_Path(path).name}: {exc}")
+                    continue
+                all_moments.extend(moments)
+                self.file_complete.emit(path)

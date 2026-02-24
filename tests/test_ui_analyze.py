@@ -166,8 +166,10 @@ class TestProgressSignals:
     def test_progress_with_completed_files(self, panel):
         panel._total_files = 2
         panel._completed_files = 1
+        # Simulate first file already complete in the progress dict
+        panel._file_progress["/tmp/a.mp4"] = 1.0
         panel._on_progress("/tmp/b.mp4", 0.5)
-        # Overall: (1 + 0.5) / 2 = 75%
+        # Overall: (1.0 + 0.5) / 2 = 75%
         assert panel.progress_bar.value() == 75
 
 
@@ -260,8 +262,10 @@ class TestFileList:
         assert panel.file_list.count() == 2
 
     @patch.object(AnalysisWorker, "start")
-    def test_first_file_marked_analyzing(self, mock_start, panel):
+    def test_first_progress_marks_analyzing(self, mock_start, panel):
+        """File is marked analyzing on first progress signal."""
         panel.start_analysis()
+        panel._on_progress("/tmp/a.mp4", 0.1)
         text = panel.file_list.item(0).text()
         assert "a.mp4" in text
         assert "\u25B6" in text  # play triangle
@@ -281,11 +285,13 @@ class TestFileList:
         assert "\u2714" in text  # checkmark
 
     @patch.object(AnalysisWorker, "start")
-    def test_next_file_becomes_analyzing(self, mock_start, panel):
+    def test_parallel_both_analyzing(self, mock_start, panel):
+        """Both files can be marked analyzing concurrently."""
         panel.start_analysis()
-        panel._on_file_complete("/tmp/a.mp4")
-        text = panel.file_list.item(1).text()
-        assert "\u25B6" in text  # now analyzing
+        panel._on_progress("/tmp/a.mp4", 0.1)
+        panel._on_progress("/tmp/b.mp4", 0.1)
+        assert "\u25B6" in panel.file_list.item(0).text()
+        assert "\u25B6" in panel.file_list.item(1).text()
 
 
 class TestETAFormatting:

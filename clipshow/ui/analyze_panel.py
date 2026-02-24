@@ -62,6 +62,8 @@ class AnalyzePanel(QWidget):
         self._analysis_start_time: float = 0.0
         self._total_video_duration: float = 0.0
         self._source_paths: list[str] = []
+        self._file_progress: dict[str, float] = {}
+        self._analyzing_paths: set[str] = set()
         self._setup_ui()
         self._connect_signals()
         self._load_settings()
@@ -345,6 +347,8 @@ class AnalyzePanel(QWidget):
         self._analysis_start_time = time.monotonic()
         self._total_video_duration = sum(s.duration for s in self.project.sources)
         self._source_paths = [s.path for s in self.project.sources]
+        self._file_progress = {}
+        self._analyzing_paths = set()
 
         self._populate_file_list()
 
@@ -363,9 +367,6 @@ class AnalyzePanel(QWidget):
         self.progress_bar.show()
         self.analyze_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
-
-        # Mark first file as analyzing
-        self._update_file_status(0, _ANALYZING)
 
         self._worker.start()
         self.analysis_started.emit()
@@ -389,10 +390,21 @@ class AnalyzePanel(QWidget):
         return f"~{minutes}m {secs:02d}s remaining"
 
     def _on_progress(self, source_path: str, fraction: float) -> None:
-        # Overall progress = (completed files + current file fraction) / total files
-        overall = (self._completed_files + fraction) / self._total_files
+        # Track per-file progress
+        self._file_progress[source_path] = fraction
+
+        # Mark file as analyzing in list on first progress
+        if source_path not in self._analyzing_paths:
+            self._analyzing_paths.add(source_path)
+            try:
+                idx = self._source_paths.index(source_path)
+                self._update_file_status(idx, _ANALYZING)
+            except ValueError:
+                pass
+
+        # Overall progress = sum of all per-file fractions / total files
+        overall = sum(self._file_progress.values()) / self._total_files
         self.progress_bar.setValue(int(overall * 100))
-        basename = Path(source_path).name
 
         # Compute rate and ETA
         elapsed = time.monotonic() - self._analysis_start_time
@@ -405,22 +417,30 @@ class AnalyzePanel(QWidget):
             eta = elapsed * (1 - overall) / overall
             eta_str = self._format_eta(eta)
 
-        parts = [
-            f"Analyzing {basename} "
-            f"({self._completed_files + 1} of {self._total_files})"
-        ]
+        active = len(self._analyzing_paths) - self._completed_files
+        if active <= 1:
+            basename = Path(source_path).name
+            desc = (
+                f"Analyzing {basename} "
+                f"({self._completed_files + 1} of {self._total_files})"
+            )
+        else:
+            desc = f"Analyzing {active} of {self._total_files} clips"
+
+        parts = [desc]
         if rate_str:
             parts.append(f"\u2014 {rate_str}, {eta_str}")
         self.status_label.setText(" ".join(parts))
 
     def _on_file_complete(self, source_path: str) -> None:
-        # Mark completed file
-        self._update_file_status(self._completed_files, _COMPLETE)
+        # Mark completed in file list
+        self._file_progress[source_path] = 1.0
         self._completed_files += 1
-
-        # Mark next file as analyzing (if any)
-        if self._completed_files < self._total_files:
-            self._update_file_status(self._completed_files, _ANALYZING)
+        try:
+            idx = self._source_paths.index(source_path)
+            self._update_file_status(idx, _COMPLETE)
+        except ValueError:
+            pass
 
         basename = Path(source_path).name
         self.status_label.setText(
