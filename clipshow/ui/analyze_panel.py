@@ -291,6 +291,13 @@ class AnalyzePanel(QWidget):
         self.semantic_check.setChecked(self.settings.semantic_weight > 0)
         self.emotion_check.setChecked(self.settings.emotion_weight > 0)
 
+        # Ensure sliders are disabled when their checkbox is unchecked
+        # (setChecked(False) on an already-unchecked box won't emit toggled)
+        for name in self._DETECTOR_NAMES:
+            check = getattr(self, f"{name}_check")
+            slider = getattr(self, f"{name}_slider")
+            slider.setEnabled(check.isChecked())
+
     _DETECTOR_NAMES = ("scene", "audio", "motion", "semantic", "emotion")
 
     def _on_check_toggled(self, detector: str, enabled: bool) -> None:

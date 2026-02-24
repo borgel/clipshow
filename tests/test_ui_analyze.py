@@ -49,13 +49,12 @@ class TestInitialState:
         assert panel.threshold_slider.value() == int(s.score_threshold * SLIDER_SCALE)
 
     def test_checkboxes_reflect_weights(self, panel):
-        assert panel.scene_check.isChecked() is True
-        assert panel.audio_check.isChecked() is True
-        assert panel.motion_check.isChecked() is True
-        # semantic defaults to 0.0, so unchecked
+        # All detectors default to unchecked (weight=0)
+        assert panel.scene_check.isChecked() is False
+        assert panel.audio_check.isChecked() is False
+        assert panel.motion_check.isChecked() is False
         assert panel.semantic_check.isChecked() is False
-        # emotion defaults to 0.2, so checked
-        assert panel.emotion_check.isChecked() is True
+        assert panel.emotion_check.isChecked() is False
 
     def test_analyze_button_enabled(self, panel):
         assert panel.analyze_button.isEnabled() is True
@@ -110,14 +109,18 @@ class TestEditPromptsButton:
 
 class TestCheckboxBehavior:
     def test_uncheck_disables_slider(self, panel):
+        panel.scene_check.setChecked(True)
         panel.scene_check.setChecked(False)
         assert panel.scene_slider.isEnabled() is False
 
     def test_uncheck_zeros_weight(self, panel):
+        panel.scene_check.setChecked(True)
+        panel.scene_slider.setValue(50)
         panel.scene_check.setChecked(False)
         assert panel.settings.scene_weight == 0.0
 
     def test_recheck_enables_slider(self, panel):
+        panel.scene_check.setChecked(True)
         panel.scene_check.setChecked(False)
         panel.scene_check.setChecked(True)
         assert panel.scene_slider.isEnabled() is True
@@ -330,10 +333,10 @@ class TestAutoBalance:
         assert panel.auto_balance_check.isChecked() is False
 
     def test_enable_balances_three_detectors(self, panel):
-        """With 3 enabled detectors (scene, audio, motion), each gets 33%."""
-        # Defaults: scene=0.3, audio=0.25, motion=0.25, semantic=0, emotion=0.2
-        # Disable emotion so we have 3 enabled detectors
-        panel.emotion_check.setChecked(False)
+        """With 3 enabled detectors, each gets 33%."""
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
+        panel.motion_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         # scene, audio, motion = 33 each (100 // 3)
         assert panel.scene_slider.value() == 33
@@ -344,7 +347,11 @@ class TestAutoBalance:
 
     def test_enable_balances_all_five(self, panel):
         """With all 5 detectors enabled, each gets 20%."""
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
+        panel.motion_check.setChecked(True)
         panel.semantic_check.setChecked(True)
+        panel.emotion_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         assert panel.scene_slider.value() == 20
         assert panel.audio_slider.value() == 20
@@ -354,44 +361,53 @@ class TestAutoBalance:
 
     def test_sliders_disabled_in_auto_mode(self, panel):
         """Sliders for enabled detectors are disabled in auto-balance mode."""
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         assert panel.scene_slider.isEnabled() is False
         assert panel.audio_slider.isEnabled() is False
+        # unchecked detectors also disabled
         assert panel.motion_slider.isEnabled() is False
-        assert panel.emotion_slider.isEnabled() is False
-        # semantic is unchecked, so also disabled
         assert panel.semantic_slider.isEnabled() is False
+        assert panel.emotion_slider.isEnabled() is False
 
     def test_sliders_re_enabled_on_disable(self, panel):
         """Turning off auto-balance re-enables sliders for checked detectors."""
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         panel.auto_balance_check.setChecked(False)
         assert panel.scene_slider.isEnabled() is True
         assert panel.audio_slider.isEnabled() is True
-        assert panel.motion_slider.isEnabled() is True
-        # semantic was unchecked, stays disabled
+        # unchecked detectors stay disabled
+        assert panel.motion_slider.isEnabled() is False
         assert panel.semantic_slider.isEnabled() is False
-        assert panel.emotion_slider.isEnabled() is True
+        assert panel.emotion_slider.isEnabled() is False
 
     def test_toggling_detector_rebalances(self, panel):
         """Toggling a detector on/off while auto-balanced rebalances others."""
-        # Start with scene, audio, motion, emotion = 4 enabled
+        # Enable 3 detectors and auto-balance
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
+        panel.motion_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
-        assert panel.scene_slider.value() == 25  # 100 // 4
+        assert panel.scene_slider.value() == 33  # 100 // 3
 
-        # Enable semantic → 5 enabled
+        # Enable semantic → 4 enabled
         panel.semantic_check.setChecked(True)
-        assert panel.scene_slider.value() == 20  # 100 // 5
-        assert panel.semantic_slider.value() == 20
-
-        # Disable emotion → 4 enabled
-        panel.emotion_check.setChecked(False)
         assert panel.scene_slider.value() == 25  # 100 // 4
-        assert panel.emotion_slider.value() == 0
+        assert panel.semantic_slider.value() == 25
+
+        # Disable motion → 3 enabled
+        panel.motion_check.setChecked(False)
+        assert panel.scene_slider.value() == 33  # 100 // 3
+        assert panel.motion_slider.value() == 0
 
     def test_settings_updated_in_auto_mode(self, panel):
         """Auto-balance updates the underlying settings object."""
-        panel.emotion_check.setChecked(False)
+        panel.scene_check.setChecked(True)
+        panel.audio_check.setChecked(True)
+        panel.motion_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         # 3 detectors: scene, audio, motion → 33% each
         assert panel.settings.scene_weight == pytest.approx(0.33)
@@ -401,9 +417,7 @@ class TestAutoBalance:
 
     def test_single_detector_gets_100(self, panel):
         """With only one detector enabled, it gets 100%."""
-        panel.audio_check.setChecked(False)
-        panel.motion_check.setChecked(False)
-        panel.emotion_check.setChecked(False)
+        panel.scene_check.setChecked(True)
         panel.auto_balance_check.setChecked(True)
         assert panel.scene_slider.value() == 100
         assert panel.settings.scene_weight == pytest.approx(1.0)

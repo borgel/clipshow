@@ -11,12 +11,12 @@ DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "settings.json"
 
 @dataclass
 class Settings:
-    # Detector weights (0 = disabled)
-    scene_weight: float = 0.3
-    audio_weight: float = 0.25
-    motion_weight: float = 0.25
+    # Detector weights (0 = disabled, all off by default in UI)
+    scene_weight: float = 0.0
+    audio_weight: float = 0.0
+    motion_weight: float = 0.0
     semantic_weight: float = 0.0
-    emotion_weight: float = 0.2
+    emotion_weight: float = 0.0
 
     # Semantic detector prompts
     semantic_prompts: list[str] = field(

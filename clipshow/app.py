@@ -48,6 +48,12 @@ def run_auto_mode(
     from clipshow.model.moments import HighlightSegment
 
     settings = Settings()
+    # CLI auto mode uses sensible defaults when no detectors are configured
+    if not settings.enabled_detectors:
+        settings.scene_weight = 0.3
+        settings.audio_weight = 0.25
+        settings.motion_weight = 0.25
+        settings.emotion_weight = 0.2
     if workers:
         settings.max_workers = workers
     pipeline = DetectionPipeline(settings)
