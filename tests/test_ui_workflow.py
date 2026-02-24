@@ -75,6 +75,9 @@ class TestFullWorkflow:
         assert window.tabs.currentIndex() == 0
         window.next_button.click()
         assert window.tabs.currentIndex() == 1
+        # Simulate analysis completing so Next is enabled on Analyze tab
+        moments = [DetectedMoment("/tmp/test.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])]
+        window.analyze_panel._on_all_complete(moments)
         window.next_button.click()
         assert window.tabs.currentIndex() == 2
         window.next_button.click()
@@ -84,8 +87,12 @@ class TestFullWorkflow:
     def test_back_navigation(self, window):
         """Can navigate back through tabs."""
         _add_file(window)
-        for _ in range(3):
-            window.next_button.click()
+        window.next_button.click()  # -> Analyze (1)
+        # Simulate analysis completing so Next works on Analyze tab
+        moments = [DetectedMoment("/tmp/test.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])]
+        window.analyze_panel._on_all_complete(moments)
+        window.next_button.click()  # -> Review (2)
+        window.next_button.click()  # -> Export (3)
         assert window.tabs.currentIndex() == 3
         window.back_button.click()
         assert window.tabs.currentIndex() == 2
@@ -150,6 +157,48 @@ class TestFullWorkflow:
         assert len(window.project.sources) == 1
         assert window.project is window.import_panel.project
         assert window.project is window.analyze_panel.project
+
+
+class TestAnalyzeTabNextButton:
+    def test_next_disabled_on_analyze_without_results(self, window):
+        """Next should be disabled on Analyze tab before analysis runs."""
+        _add_file(window)
+        window.next_button.click()  # -> Analyze tab
+        assert window.tabs.currentIndex() == 1
+        assert window.next_button.isEnabled() is False
+
+    @patch.object(AnalysisWorker, "start")
+    def test_next_disabled_during_analysis(self, mock_start, window):
+        """Next should be disabled while analysis is running."""
+        _add_file(window)
+        window.next_button.click()  # -> Analyze tab
+        window.analyze_panel.start_analysis()
+        assert window.next_button.isEnabled() is False
+
+    def test_next_enabled_after_analysis_complete(self, window):
+        """Next should be enabled after analysis completes."""
+        _add_file(window)
+        window.next_button.click()  # -> Analyze tab
+        moments = [DetectedMoment("/tmp/test.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])]
+        window.analyze_panel._on_all_complete(moments)
+        assert window.next_button.isEnabled() is True
+
+    def test_segments_sorted_by_filename(self, window):
+        """Segments should be sorted by (source_path, start_time)."""
+        _add_file(window, "/tmp/b.mp4")
+        _add_file(window, "/tmp/a.mp4")
+        moments = [
+            DetectedMoment("/tmp/b.mp4", 5.0, 8.0, 0.9, 0.7, ["scene"]),
+            DetectedMoment("/tmp/a.mp4", 1.0, 3.0, 0.8, 0.6, ["audio"]),
+            DetectedMoment("/tmp/b.mp4", 1.0, 3.0, 0.7, 0.5, ["motion"]),
+        ]
+        window._on_analysis_complete(moments)
+        segments = window.review_panel.segments
+        assert segments[0].source_path == "/tmp/a.mp4"
+        assert segments[1].source_path == "/tmp/b.mp4"
+        assert segments[1].start_time == 1.0
+        assert segments[2].source_path == "/tmp/b.mp4"
+        assert segments[2].start_time == 5.0
 
 
 class TestMenuBar:

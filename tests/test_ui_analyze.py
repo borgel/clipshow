@@ -1,11 +1,12 @@
 """UI tests: analyze panel settings, worker signals, and progress."""
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from clipshow.config import Settings
-from clipshow.model.moments import DetectedMoment
+from clipshow.model.moments import DetectedMoment, HighlightSegment
 from clipshow.model.project import Project, VideoSource
 from clipshow.ui.analyze_panel import SLIDER_SCALE, AnalyzePanel
 from clipshow.workers.analysis_worker import AnalysisWorker
@@ -221,3 +222,103 @@ class TestCancelAnalysis:
 
     def test_cancel_without_worker_no_crash(self, panel):
         panel.cancel_analysis()  # should not raise
+
+
+class TestHasResults:
+    def test_initially_false(self, panel):
+        assert panel.has_results is False
+
+    def test_true_after_all_complete(self, panel):
+        panel._on_all_complete([])
+        assert panel.has_results is True
+
+    def test_still_true_after_error(self, panel):
+        """Error doesn't reset has_results — previous results may still be valid."""
+        panel._on_all_complete([])
+        panel._on_error("something broke")
+        assert panel.has_results is True
+
+
+class TestAnalysisStartedSignal:
+    @patch.object(AnalysisWorker, "start")
+    def test_emits_on_start(self, mock_start, panel, qtbot):
+        with qtbot.waitSignal(panel.analysis_started, timeout=1000):
+            panel.start_analysis()
+
+    def test_not_emitted_without_sources(self, empty_panel, qtbot):
+        """Starting analysis with no sources should not emit analysis_started."""
+        signals = []
+        empty_panel.analysis_started.connect(lambda: signals.append(True))
+        empty_panel.start_analysis()
+        assert signals == []
+
+
+class TestFramePreview:
+    @patch.object(AnalysisWorker, "start")
+    def test_preview_shown_on_start(self, mock_start, panel):
+        panel.start_analysis()
+        assert not panel.frame_preview_label.isHidden()
+
+    def test_preview_hidden_on_complete(self, panel):
+        panel.frame_preview_label.show()
+        panel._on_all_complete([])
+        assert panel.frame_preview_label.isHidden()
+
+    def test_preview_hidden_on_error(self, panel):
+        panel.frame_preview_label.show()
+        panel._on_error("failed")
+        assert panel.frame_preview_label.isHidden()
+
+
+class TestETAFormatting:
+    def test_short_eta(self):
+        assert AnalyzePanel._format_eta(45) == "~45s remaining"
+
+    def test_minutes_eta(self):
+        assert AnalyzePanel._format_eta(132) == "~2m 12s remaining"
+
+    def test_zero_eta(self):
+        assert AnalyzePanel._format_eta(0) == "~0s remaining"
+
+
+class TestRateAndETA:
+    def test_rate_shown_in_status(self, panel):
+        """After sufficient elapsed time, status should include rate and ETA."""
+        panel._total_files = 1
+        panel._completed_files = 0
+        panel._total_video_duration = 100.0
+        # Simulate 2 seconds elapsed
+        panel._analysis_start_time = time.monotonic() - 2.0
+        panel._on_progress("/tmp/a.mp4", 0.5)
+        text = panel.status_label.text()
+        assert "realtime" in text
+        assert "remaining" in text
+
+    def test_rate_not_shown_initially(self, panel):
+        """When elapsed time is tiny, no rate/ETA shown."""
+        panel._total_files = 1
+        panel._completed_files = 0
+        panel._total_video_duration = 100.0
+        panel._analysis_start_time = time.monotonic()
+        panel._on_progress("/tmp/a.mp4", 0.001)
+        text = panel.status_label.text()
+        assert "realtime" not in text
+
+
+class TestHighlightSegmentDetectors:
+    def test_from_moment_copies_detectors(self):
+        m = DetectedMoment("/tmp/a.mp4", 1.0, 3.0, 0.8, 0.6, ["scene", "audio"])
+        seg = HighlightSegment.from_moment(m, order=0)
+        assert seg.detectors == ["scene", "audio"]
+
+    def test_from_moment_default_empty(self):
+        m = DetectedMoment("/tmp/a.mp4", 1.0, 3.0, 0.8, 0.6)
+        seg = HighlightSegment.from_moment(m, order=0)
+        assert seg.detectors == []
+
+    def test_detectors_independent_copy(self):
+        """Modifying segment detectors shouldn't affect the moment."""
+        m = DetectedMoment("/tmp/a.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])
+        seg = HighlightSegment.from_moment(m, order=0)
+        seg.detectors.append("audio")
+        assert m.contributing_detectors == ["scene"]

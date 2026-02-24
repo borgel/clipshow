@@ -1,5 +1,6 @@
 """UI tests: main window layout and tab navigation."""
 
+from clipshow.model.moments import DetectedMoment
 from clipshow.model.project import VideoSource
 from clipshow.ui.main_window import MainWindow
 
@@ -66,18 +67,30 @@ class TestMainWindow:
 
     def test_next_disabled_on_last_tab(self, qtbot):
         window = _window_with_file(qtbot)
-        for _ in range(3):
-            window.next_button.click()
+        window.next_button.click()  # -> Analyze (1)
+        # Simulate analysis completing so Next works
+        moments = [DetectedMoment("/tmp/test.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])]
+        window.analyze_panel._on_all_complete(moments)
+        window.next_button.click()  # -> Review (2)
+        window.next_button.click()  # -> Export (3)
         assert window.tabs.currentIndex() == 3
         assert window.next_button.isEnabled() is False
 
     def test_sequential_tab_enabling(self, qtbot):
         """Tabs should enable sequentially as Next is clicked."""
         window = _window_with_file(qtbot)
-        for expected_tab in range(1, 4):
-            window.next_button.click()
-            assert window.tabs.currentIndex() == expected_tab
-            assert window.tabs.isTabEnabled(expected_tab) is True
+        window.next_button.click()
+        assert window.tabs.currentIndex() == 1
+        assert window.tabs.isTabEnabled(1) is True
+        # Simulate analysis completing so Next works on Analyze tab
+        moments = [DetectedMoment("/tmp/test.mp4", 1.0, 3.0, 0.8, 0.6, ["scene"])]
+        window.analyze_panel._on_all_complete(moments)
+        window.next_button.click()
+        assert window.tabs.currentIndex() == 2
+        assert window.tabs.isTabEnabled(2) is True
+        window.next_button.click()
+        assert window.tabs.currentIndex() == 3
+        assert window.tabs.isTabEnabled(3) is True
 
     def test_minimum_size(self, qtbot):
         window = MainWindow()

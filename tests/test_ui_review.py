@@ -165,6 +165,28 @@ class TestTrimControls:
         assert "4.5s" in loaded_panel.trim_label.text()
 
 
+class TestDetectorTags:
+    def test_detector_tags_shown(self, qtbot):
+        sl = SegmentList()
+        qtbot.addWidget(sl)
+        seg = HighlightSegment(
+            "/tmp/a.mp4", 1.0, 4.0, 0.8, detectors=["scene", "motion"]
+        )
+        sl.set_segments([seg])
+        item = sl.list_widget.item(0)
+        widget = sl.list_widget.itemWidget(item)
+        assert "[Scene, Motion]" in widget.label.text()
+
+    def test_no_tags_when_empty(self, qtbot):
+        sl = SegmentList()
+        qtbot.addWidget(sl)
+        seg = HighlightSegment("/tmp/a.mp4", 1.0, 4.0, 0.8, detectors=[])
+        sl.set_segments([seg])
+        item = sl.list_widget.item(0)
+        widget = sl.list_widget.itemWidget(item)
+        assert "[" not in widget.label.text()
+
+
 class TestIncludeExclude:
     def test_uncheck_excludes(self, loaded_panel):
         loaded_panel.segment_list.list_widget.setCurrentRow(0)

@@ -6,7 +6,6 @@ import time
 from pathlib import Path as _Path
 
 import cv2
-import numpy as np
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
 
