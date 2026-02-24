@@ -33,7 +33,7 @@ Each detector produces a score over time. ClipShow combines these scores using w
 Clone the repository and install in editable mode:
 
 ```bash
-git clone https://github.com/your-org/clipshow.git
+git clone https://github.com/borgel/clipshow.git
 cd clipshow
 pip install -e .
 ```
@@ -138,7 +138,7 @@ You can customize these in the Analyze panel (click "Edit Prompts...") or in Pre
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/clipshow.git
+git clone https://github.com/borgel/clipshow.git
 cd clipshow
 pip install -e ".[test]"
 ```
