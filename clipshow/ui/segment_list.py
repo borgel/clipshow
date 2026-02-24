@@ -38,10 +38,14 @@ class SegmentItemWidget(QWidget):
         from pathlib import Path
 
         name = Path(segment.source_path).name
-        self.label = QLabel(
+        text = (
             f"{name}  {segment.start_time:.1f}s - {segment.end_time:.1f}s  "
             f"(score: {segment.score:.2f})"
         )
+        if segment.detectors:
+            tags = ", ".join(d.capitalize() for d in segment.detectors)
+            text += f"  [{tags}]"
+        self.label = QLabel(text)
         layout.addWidget(self.label)
         layout.addStretch()
 

@@ -21,6 +21,7 @@ class HighlightSegment:
     score: float
     included: bool = True
     order: int = 0
+    detectors: list[str] = field(default_factory=list)
 
     @property
     def duration(self) -> float:
@@ -34,4 +35,5 @@ class HighlightSegment:
             end_time=moment.end_time,
             score=moment.peak_score,
             order=order,
+            detectors=list(moment.contributing_detectors),
         )
