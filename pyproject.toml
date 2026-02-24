@@ -29,6 +29,9 @@ semantic = [
 emotion = [
     "onnxruntime",
 ]
+audiovisual = [
+    "onnxruntime",
+]
 all = [
     "onnx_clip",
     "onnxruntime",
