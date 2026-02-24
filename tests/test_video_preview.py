@@ -18,6 +18,14 @@ def preview(qtbot):
     p.cleanup()
 
 
+@pytest.fixture()
+def fake_video(tmp_path):
+    """Create a dummy file so path-existence checks pass."""
+    p = tmp_path / "test.mp4"
+    p.write_bytes(b"\x00")
+    return str(p)
+
+
 class TestInitialState:
     def test_play_disabled(self, preview):
         assert preview.play_button.isEnabled() is False
@@ -30,25 +38,31 @@ class TestInitialState:
 
 
 class TestLoad:
-    def test_load_enables_play(self, preview):
-        preview.load("/tmp/test.mp4")
+    def test_load_enables_play(self, preview, fake_video):
+        preview.load(fake_video)
         assert preview.play_button.isEnabled() is True
 
-    def test_load_sets_source(self, preview):
-        preview.load("/tmp/test.mp4")
+    def test_load_sets_source(self, preview, fake_video):
+        preview.load(fake_video)
         source = preview.player.source()
-        assert source.toLocalFile() == "/tmp/test.mp4"
+        assert source.toLocalFile() == fake_video
+
+    def test_load_missing_file_skips(self, preview):
+        """Loading a non-existent file should not set source (avoids segfault)."""
+        preview.load("/nonexistent/video.mp4")
+        assert preview.play_button.isEnabled() is False
+        assert preview.player.source() == QUrl()
 
 
 class TestPlayPause:
-    def test_play_calls_player(self, preview):
-        preview.load("/tmp/test.mp4")
+    def test_play_calls_player(self, preview, fake_video):
+        preview.load(fake_video)
         preview.player.play = MagicMock()
         preview.play_button.click()
         preview.player.play.assert_called_once()
 
-    def test_pause_calls_player(self, preview):
-        preview.load("/tmp/test.mp4")
+    def test_pause_calls_player(self, preview, fake_video):
+        preview.load(fake_video)
         preview.player.pause = MagicMock()
         preview.pause_button.setEnabled(True)
         preview.pause_button.click()
@@ -77,24 +91,31 @@ class TestStateChanges:
 
 
 class TestSegmentPlayback:
-    def test_play_segment_sets_source(self, preview):
+    def test_play_segment_sets_source(self, preview, fake_video):
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
-        preview.play_segment("/tmp/test.mp4", 1000, 5000)
+        preview.play_segment(fake_video, 1000, 5000)
         source = preview.player.source()
-        assert source.toLocalFile() == "/tmp/test.mp4"
+        assert source.toLocalFile() == fake_video
 
-    def test_play_segment_sets_position(self, preview):
+    def test_play_segment_sets_position(self, preview, fake_video):
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
-        preview.play_segment("/tmp/test.mp4", 1000, 5000)
+        preview.play_segment(fake_video, 1000, 5000)
         preview.player.setPosition.assert_called_with(1000)
 
-    def test_play_segment_starts_playback(self, preview):
+    def test_play_segment_starts_playback(self, preview, fake_video):
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
-        preview.play_segment("/tmp/test.mp4", 1000, 5000)
+        preview.play_segment(fake_video, 1000, 5000)
         preview.player.play.assert_called_once()
+
+    def test_play_segment_missing_file_skips(self, preview):
+        """play_segment with non-existent file should not trigger FFmpeg."""
+        preview.player.play = MagicMock()
+        preview.play_segment("/nonexistent/video.mp4", 0, 5000)
+        preview.player.play.assert_not_called()
+        assert preview.player.source() == QUrl()
 
     def test_segment_end_pauses_playback(self, preview):
         preview._segment_end = 5000
@@ -135,8 +156,8 @@ class TestCleanup:
         preview.cleanup()
         preview.player.stop.assert_called_once()
 
-    def test_cleanup_clears_source(self, preview):
-        preview.load("/tmp/test.mp4")
+    def test_cleanup_clears_source(self, preview, fake_video):
+        preview.load(fake_video)
         preview.cleanup()
         assert preview.player.source() == QUrl()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PySide6.QtCore import QUrl, Signal, Slot
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
@@ -76,12 +77,18 @@ class VideoPreview(QWidget):
 
     def load(self, path: str) -> None:
         """Load a video file for playback."""
+        if not Path(path).is_file():
+            logger.warning("Cannot load — file not found: %s", path)
+            return
         self._segment_end = None
         self.player.setSource(QUrl.fromLocalFile(path))
         self.play_button.setEnabled(True)
 
     def play_segment(self, path: str, start_ms: int, end_ms: int) -> None:
         """Load a video and play a specific segment (start/end in milliseconds)."""
+        if not Path(path).is_file():
+            logger.warning("Cannot play — file not found: %s", path)
+            return
         self._segment_end = end_ms
         self.player.setSource(QUrl.fromLocalFile(path))
         self.player.setPosition(start_ms)
