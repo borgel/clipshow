@@ -66,7 +66,7 @@ class TestPipelineWithMocks:
             {"scene": lambda: mock_scene},
         ):
             # Need to patch _build_detectors to use our mock
-            pipeline._build_detectors = lambda: [("scene", mock_scene, 1.0)]
+            pipeline._build_detectors = lambda **kw: [("scene", mock_scene, 1.0)]
             pipeline.analyze_video(
                 "test.mp4",
                 video_duration=0.5,
@@ -134,6 +134,54 @@ class TestPipelineWithMocks:
         assert len(detectors) == 1
         assert captured_kwargs.get("prompts") == custom_prompts
 
+    def test_warning_on_missing_optional_detector(self):
+        """Pipeline should warn when optional detector dependency is missing."""
+        settings = Settings(
+            scene_weight=0.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            semantic_weight=1.0,
+            emotion_weight=0.0,
+        )
+        pipeline = DetectionPipeline(settings)
+        warnings = []
+
+        with patch(
+            "clipshow.detection.pipeline._get_optional_detector",
+            return_value=None,
+        ):
+            pipeline._build_detectors(warning_callback=warnings.append)
+
+        assert len(warnings) == 1
+        assert "Semantic" in warnings[0]
+        assert "missing dependencies" in warnings[0]
+
+    def test_warning_on_runtime_error(self):
+        """Pipeline should warn when detector raises RuntimeError during detect."""
+        settings = Settings(
+            scene_weight=1.0,
+            audio_weight=0.0,
+            motion_weight=0.0,
+            semantic_weight=0.0,
+            emotion_weight=0.0,
+        )
+        pipeline = DetectionPipeline(settings)
+        warnings = []
+
+        failing_detector = MagicMock()
+        failing_detector.detect.side_effect = RuntimeError("onnx_clip not installed")
+        pipeline._build_detectors = lambda **kw: [("scene", failing_detector, 1.0)]
+
+        moments = pipeline.analyze_video(
+            "test.mp4",
+            video_duration=5.0,
+            warning_callback=warnings.append,
+        )
+        assert len(warnings) == 1
+        assert "Scene" in warnings[0]
+        assert "onnx_clip not installed" in warnings[0]
+        assert moments == []
+
     def test_analyze_all_combines_results(self):
         settings = Settings(
             scene_weight=1.0,
@@ -148,7 +196,7 @@ class TestPipelineWithMocks:
         scores = np.zeros(50)  # 5 seconds
         scores[20:30] = 0.9
         mock_scene = self._mock_detector("scene", scores)
-        pipeline._build_detectors = lambda: [("scene", mock_scene, 1.0)]
+        pipeline._build_detectors = lambda **kw: [("scene", mock_scene, 1.0)]
 
         results = pipeline.analyze_all(
             [("video1.mp4", 5.0), ("video2.mp4", 5.0)]
@@ -174,7 +222,7 @@ class TestPipelineWithMocks:
         )
         pipeline_seq = DetectionPipeline(settings_seq)
         mock_scene = self._mock_detector("scene", scores)
-        pipeline_seq._build_detectors = lambda: [("scene", mock_scene, 1.0)]
+        pipeline_seq._build_detectors = lambda **kw: [("scene", mock_scene, 1.0)]
 
         video_paths = [("video1.mp4", 5.0), ("video2.mp4", 5.0)]
         sequential = pipeline_seq.analyze_all(video_paths)
@@ -195,7 +243,7 @@ class TestPipelineWithMocks:
             s = Settings(**sd)
             p = DetectionPipeline(s)
             mock = self._mock_detector("scene", scores)
-            p._build_detectors = lambda: [("scene", mock, 1.0)]
+            p._build_detectors = lambda **kw: [("scene", mock, 1.0)]
             return p.analyze_video(vp, vd)
 
         with (

@@ -42,6 +42,7 @@ class AnalysisWorker(QThread):
     all_complete = Signal(list)
     error = Signal(str)
     status = Signal(str)
+    warning = Signal(str)
     frame_preview = Signal(object)  # QImage
 
     def __init__(
@@ -102,11 +103,15 @@ class AnalysisWorker(QThread):
             self.progress.emit(path, p)
             self._maybe_emit_preview(path, duration, p)
 
+        def on_warning(msg: str) -> None:
+            self.warning.emit(msg)
+
         return pipeline.analyze_video(
             path,
             video_duration=duration,
             progress_callback=on_progress,
             cancel_flag=self._is_cancelled,
+            warning_callback=on_warning,
         )
 
     def run(self) -> None:

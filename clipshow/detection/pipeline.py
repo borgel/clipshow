@@ -56,7 +56,9 @@ class DetectionPipeline:
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
 
-    def _build_detectors(self) -> list[tuple[str, Detector, float]]:
+    def _build_detectors(
+        self, warning_callback: callable | None = None
+    ) -> list[tuple[str, Detector, float]]:
         """Return (name, detector_instance, weight) for enabled detectors."""
         result = []
         for name, weight in self.settings.detector_weights.items():
@@ -72,6 +74,11 @@ class DetectionPipeline:
                     if name == "semantic":
                         kwargs["prompts"] = self.settings.semantic_prompts
                     result.append((name, cls(**kwargs), weight))
+                elif warning_callback:
+                    warning_callback(
+                        f"{name.title()} detector skipped: missing dependencies. "
+                        f'Install with: uv sync --extra {name}'
+                    )
         return result
 
     def analyze_video(
@@ -80,6 +87,7 @@ class DetectionPipeline:
         video_duration: float,
         progress_callback: callable | None = None,
         cancel_flag: callable | None = None,
+        warning_callback: callable | None = None,
     ) -> list[DetectedMoment]:
         """Run all enabled detectors on a single video and extract moments.
 
@@ -88,11 +96,12 @@ class DetectionPipeline:
             video_duration: Total duration in seconds (from ffprobe).
             progress_callback: Optional callable(float) for overall progress (0-1).
             cancel_flag: Optional callable() -> bool for cancellation.
+            warning_callback: Optional callable(str) for non-fatal warnings.
 
         Returns:
             List of DetectedMoment sorted by peak_score descending.
         """
-        detectors = self._build_detectors()
+        detectors = self._build_detectors(warning_callback=warning_callback)
         if not detectors:
             return []
 
@@ -115,8 +124,10 @@ class DetectionPipeline:
                     progress_callback=per_detector_progress,
                     cancel_flag=cancel_flag,
                 )
-            except RuntimeError:
+            except RuntimeError as exc:
                 # Optional detector failed to load (missing dependency) — skip
+                if warning_callback:
+                    warning_callback(f"{name.title()} detector skipped: {exc}")
                 continue
 
             if len(result.scores) > 0:

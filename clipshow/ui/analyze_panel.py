@@ -195,6 +195,12 @@ class AnalyzePanel(QWidget):
         self.status_label = QLabel("")
         progress_layout.addWidget(self.status_label)
 
+        self.warning_label = QLabel("")
+        self.warning_label.setWordWrap(True)
+        self.warning_label.setStyleSheet("color: #cc7700;")
+        self.warning_label.hide()
+        progress_layout.addWidget(self.warning_label)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.hide()
@@ -406,6 +412,11 @@ class AnalyzePanel(QWidget):
         self._worker.error.connect(self._on_error)
         self._worker.status.connect(self._on_status)
         self._worker.frame_preview.connect(self._on_frame_preview)
+        self._worker.warning.connect(self._on_warning)
+
+        self.warning_label.hide()
+        self.warning_label.setText("")
+        self._warnings: list[str] = []
 
         n = self._total_files
         self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
@@ -425,6 +436,13 @@ class AnalyzePanel(QWidget):
 
     def _on_status(self, message: str) -> None:
         self.status_label.setText(message)
+
+    def _on_warning(self, message: str) -> None:
+        """Display a warning from the analysis pipeline."""
+        if message not in self._warnings:
+            self._warnings.append(message)
+            self.warning_label.setText("\n".join(self._warnings))
+            self.warning_label.show()
 
     @staticmethod
     def _format_eta(seconds: float) -> str:

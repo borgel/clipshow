@@ -197,6 +197,36 @@ class TestAnalysisComplete:
         assert panel._worker is None
 
 
+class TestWarningDisplay:
+    def test_warning_shown(self, panel):
+        panel._warnings = []
+        panel._on_warning("Semantic detector skipped: missing dependencies")
+        assert panel.warning_label.isHidden() is False
+        assert "Semantic" in panel.warning_label.text()
+
+    def test_duplicate_warning_not_repeated(self, panel):
+        panel._warnings = []
+        panel._on_warning("Semantic detector skipped: missing dependencies")
+        panel._on_warning("Semantic detector skipped: missing dependencies")
+        assert panel.warning_label.text().count("Semantic") == 1
+
+    def test_multiple_warnings(self, panel):
+        panel._warnings = []
+        panel._on_warning("Semantic detector skipped: missing dependencies")
+        panel._on_warning("Emotion detector skipped: missing dependencies")
+        assert "Semantic" in panel.warning_label.text()
+        assert "Emotion" in panel.warning_label.text()
+
+    @patch.object(AnalysisWorker, "start")
+    def test_warnings_cleared_on_new_analysis(self, mock_start, panel):
+        panel._warnings = []
+        panel._on_warning("old warning")
+        assert panel.warning_label.isHidden() is False
+        panel.start_analysis()
+        assert panel.warning_label.isHidden() is True
+        assert panel.warning_label.text() == ""
+
+
 class TestErrorHandling:
     def test_error_re_enables_analyze(self, panel):
         panel.analyze_button.setEnabled(False)
