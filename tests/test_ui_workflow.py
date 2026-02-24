@@ -15,7 +15,8 @@ from clipshow.workers.export_worker import ExportWorker
 def window(qtbot):
     w = MainWindow()
     qtbot.addWidget(w)
-    return w
+    yield w
+    w.review_panel.video_preview.cleanup()
 
 
 def _add_file(window, path="/tmp/test.mp4", duration=10.0):

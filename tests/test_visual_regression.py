@@ -151,17 +151,20 @@ def _make_sample_segments() -> list[HighlightSegment]:
 
 
 class TestMainWindowVisual:
-    def test_main_window_initial(self, qtbot, update_baselines):
+    @pytest.fixture(autouse=True)
+    def _window(self, qtbot):
+        self.window = MainWindow()
+        qtbot.addWidget(self.window)
+        yield
+        self.window.review_panel.video_preview.cleanup()
+
+    def test_main_window_initial(self, update_baselines):
         """Main window on first open — import tab, empty state."""
-        window = MainWindow()
-        qtbot.addWidget(window)
-        screenshot = _capture_widget(window, CAPTURE_SIZE)
+        screenshot = _capture_widget(self.window, CAPTURE_SIZE)
         _assert_visual_match(screenshot, "main_window_initial", update_baselines)
 
-    def test_main_window_with_files(self, qtbot, update_baselines):
+    def test_main_window_with_files(self, update_baselines):
         """Main window with files loaded on import tab."""
-        window = MainWindow()
-        qtbot.addWidget(window)
         for i in range(3):
             source = VideoSource(
                 path=f"/tmp/video{i}.mp4",
@@ -169,8 +172,8 @@ class TestMainWindowVisual:
                 width=1920,
                 height=1080,
             )
-            window.import_panel.add_source_directly(source)
-        screenshot = _capture_widget(window, CAPTURE_SIZE)
+            self.window.import_panel.add_source_directly(source)
+        screenshot = _capture_widget(self.window, CAPTURE_SIZE)
         _assert_visual_match(screenshot, "main_window_with_files", update_baselines)
 
 
@@ -225,12 +228,17 @@ class TestAnalyzePanelVisual:
 
 
 class TestReviewPanelVisual:
-    def test_review_with_segments(self, qtbot, update_baselines):
+    @pytest.fixture(autouse=True)
+    def _panel(self, qtbot):
+        self.panel = ReviewPanel()
+        qtbot.addWidget(self.panel)
+        yield
+        self.panel.video_preview.cleanup()
+
+    def test_review_with_segments(self, update_baselines):
         """Review panel — with segments loaded."""
-        panel = ReviewPanel()
-        qtbot.addWidget(panel)
-        panel.set_segments(_make_sample_segments())
-        screenshot = _capture_widget(panel, CAPTURE_SIZE)
+        self.panel.set_segments(_make_sample_segments())
+        screenshot = _capture_widget(self.panel, CAPTURE_SIZE)
         _assert_visual_match(screenshot, "review_with_segments", update_baselines)
 
 

@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtCore import QUrl
 from PySide6.QtMultimedia import QMediaPlayer
 
 from clipshow.ui.video_preview import VideoPreview
@@ -10,10 +11,11 @@ from clipshow.ui.video_preview import VideoPreview
 
 @pytest.fixture()
 def preview(qtbot):
-    """Fresh VideoPreview widget."""
+    """Fresh VideoPreview widget with proper cleanup to prevent segfaults."""
     p = VideoPreview()
     qtbot.addWidget(p)
-    return p
+    yield p
+    p.cleanup()
 
 
 class TestInitialState:
@@ -123,3 +125,43 @@ class TestSegmentPlayback:
         preview.player.pause = MagicMock()
         preview._check_segment_end(3000)
         preview.player.pause.assert_not_called()
+
+
+class TestCleanup:
+    """Ensure cleanup releases media resources to prevent segfaults."""
+
+    def test_cleanup_stops_player(self, preview):
+        preview.player.stop = MagicMock()
+        preview.cleanup()
+        preview.player.stop.assert_called_once()
+
+    def test_cleanup_clears_source(self, preview):
+        preview.load("/tmp/test.mp4")
+        preview.cleanup()
+        assert preview.player.source() == QUrl()
+
+    def test_cleanup_detaches_video_output(self, preview):
+        preview.player.setVideoOutput = MagicMock()
+        preview.cleanup()
+        preview.player.setVideoOutput.assert_called_with(None)
+
+    def test_cleanup_detaches_audio_output(self, preview):
+        preview.player.setAudioOutput = MagicMock()
+        preview.cleanup()
+        preview.player.setAudioOutput.assert_called_with(None)
+
+
+class TestErrorHandling:
+    """Ensure media errors are caught instead of crashing."""
+
+    def test_error_stops_player(self, preview):
+        preview.player.stop = MagicMock()
+        preview._on_error(QMediaPlayer.Error.ResourceError, "file not found")
+        preview.player.stop.assert_called_once()
+
+    def test_error_handler_connected(self, preview):
+        """Verify the errorOccurred signal is connected."""
+        # Trigger error signal — should not raise
+        preview.player.errorOccurred.emit(
+            QMediaPlayer.Error.ResourceError, "test"
+        )

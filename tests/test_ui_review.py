@@ -21,15 +21,20 @@ def _make_segments():
 def panel(qtbot):
     p = ReviewPanel()
     qtbot.addWidget(p)
-    return p
+    yield p
+    p.video_preview.cleanup()
 
 
 @pytest.fixture()
 def loaded_panel(qtbot):
     p = ReviewPanel()
     qtbot.addWidget(p)
+    # Mock play_segment to avoid triggering the FFmpeg backend with
+    # non-existent files, which causes segfaults during teardown.
+    p.video_preview.play_segment = MagicMock()
     p.set_segments(_make_segments())
-    return p
+    yield p
+    p.video_preview.cleanup()
 
 
 class TestSegmentList:

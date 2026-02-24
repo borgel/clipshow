@@ -36,7 +36,8 @@ def window_with_settings(qtbot):
     )
     w = MainWindow(settings=settings)
     qtbot.addWidget(w)
-    return w
+    yield w
+    w.review_panel.video_preview.cleanup()
 
 
 @skip_no_fixtures
@@ -248,14 +249,17 @@ class TestRealVideoParallel:
         window = MainWindow(settings=settings)
         qtbot.addWidget(window)
 
-        window.import_panel.add_files(videos)
-        window.next_button.click()
+        try:
+            window.import_panel.add_files(videos)
+            window.next_button.click()
 
-        with qtbot.waitSignal(
-            window.analyze_panel.analysis_complete, timeout=300_000
-        ) as sig:
-            window.analyze_panel.start_analysis()
+            with qtbot.waitSignal(
+                window.analyze_panel.analysis_complete, timeout=300_000
+            ) as sig:
+                window.analyze_panel.start_analysis()
 
-        moments = sig.args[0]
-        assert isinstance(moments, list)
-        assert len(moments) > 0, "Parallel analysis should find moments"
+            moments = sig.args[0]
+            assert isinstance(moments, list)
+            assert len(moments) > 0, "Parallel analysis should find moments"
+        finally:
+            window.review_panel.video_preview.cleanup()
