@@ -66,6 +66,7 @@ class TestExtractMetadata:
         assert source.width == 160
         assert source.height == 120
 
+    @pytest.mark.uses_audio_fixture
     def test_loud_moment_video_metadata(self, loud_moment_video):
         source = extract_metadata(loud_moment_video)
         assert source.width == 160

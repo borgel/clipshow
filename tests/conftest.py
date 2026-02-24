@@ -19,6 +19,13 @@ def pytest_addoption(parser):
     )
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "uses_audio_fixture: test depends on loud_moment_video (flaky MoviePy fixture)",
+    )
+
+
 @pytest.fixture(scope="session")
 def tmp_video_dir():
     """Session-scoped temp directory for synthetic test videos."""

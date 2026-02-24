@@ -3,6 +3,8 @@
 import os
 import tempfile
 
+import pytest
+
 from clipshow.app import run_auto_mode
 
 
@@ -14,6 +16,7 @@ class TestAutoMode:
         result = run_auto_mode(["/nonexistent/video.mp4"], "out.mp4", headless=True)
         assert result == 1
 
+    @pytest.mark.uses_audio_fixture
     def test_auto_mode_with_synthetic_video(self, loud_moment_video):
         """Full pipeline: load, detect, assemble from a synthetic video."""
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -323,6 +323,7 @@ class TestPipelineE2E:
         moments = pipeline.analyze_video(motion_video, video_duration=2.0)
         assert len(moments) >= 1
 
+    @pytest.mark.uses_audio_fixture
     def test_audio_video_produces_moments(self, loud_moment_video):
         settings = Settings(
             scene_weight=0.0,

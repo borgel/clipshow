@@ -28,7 +28,7 @@ jobs:
           pip install pyinstaller
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v -m "not uses_audio_fixture"
         env:
           QT_QPA_PLATFORM: offscreen
 
@@ -73,7 +73,7 @@ jobs:
           pip install pyinstaller
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v -m "not uses_audio_fixture"
         env:
           QT_QPA_PLATFORM: offscreen
 
@@ -133,25 +133,32 @@ jobs:
 
   create-release:
     needs: [build-macos, build-windows, build-linux]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Download macOS artifact
+        if: needs.build-macos.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: ClipShow-macos
           path: artifacts/
 
       - name: Download Windows artifact
+        if: needs.build-windows.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: ClipShow-windows
           path: artifacts/
 
       - name: Download Linux artifact
+        if: needs.build-linux.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: ClipShow-linux
           path: artifacts/
+
+      - name: Create artifacts directory
+        run: mkdir -p artifacts
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

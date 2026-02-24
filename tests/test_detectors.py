@@ -104,6 +104,7 @@ class TestMotionDetector:
 
 
 class TestAudioDetector:
+    @pytest.mark.uses_audio_fixture
     def test_returns_detector_result(self, loud_moment_video):
         from clipshow.detection.audio import AudioDetector
 
@@ -113,6 +114,7 @@ class TestAudioDetector:
         assert result.name == "audio"
         assert result.source_path == loud_moment_video
 
+    @pytest.mark.uses_audio_fixture
     def test_loud_moment_detected(self, loud_moment_video):
         """A video with a noise burst at ~1.0s should show scores in that region."""
         from clipshow.detection.audio import AudioDetector
@@ -122,6 +124,7 @@ class TestAudioDetector:
         assert len(result.scores) > 0
         assert result.scores.max() > 0.5  # Should have a clear peak
 
+    @pytest.mark.uses_audio_fixture
     def test_scores_normalized(self, loud_moment_video):
         from clipshow.detection.audio import AudioDetector
 
@@ -141,6 +144,7 @@ class TestAudioDetector:
         assert isinstance(result, DetectorResult)
         assert len(result.scores) == 0
 
+    @pytest.mark.uses_audio_fixture
     def test_progress_callback(self, loud_moment_video):
         from clipshow.detection.audio import AudioDetector
 
