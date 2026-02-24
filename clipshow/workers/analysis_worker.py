@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _Path
+
 from PySide6.QtCore import QThread, Signal
 
 from clipshow.config import Settings
@@ -23,6 +25,7 @@ class AnalysisWorker(QThread):
     file_complete = Signal(str)
     all_complete = Signal(list)
     error = Signal(str)
+    status = Signal(str)
 
     def __init__(
         self,
@@ -49,6 +52,9 @@ class AnalysisWorker(QThread):
             for i, (path, duration) in enumerate(self.video_paths):
                 if self._cancelled:
                     break
+
+                basename = _Path(path).name
+                self.status.emit(f"Analyzing {basename}...")
 
                 def on_progress(p: float, _path=path) -> None:
                     self.progress.emit(_path, p)

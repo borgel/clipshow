@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -42,7 +44,8 @@ class AnalyzePanel(QWidget):
         self.project = project
         self.settings = settings or Settings()
         self._worker: AnalysisWorker | None = None
-        self._progress_bars: dict[str, QProgressBar] = {}
+        self._total_files: int = 0
+        self._completed_files: int = 0
         self._setup_ui()
         self._connect_signals()
         self._load_settings()
@@ -124,9 +127,14 @@ class AnalyzePanel(QWidget):
         threshold_group.setLayout(threshold_layout)
         layout.addWidget(threshold_group)
 
-        # Progress section
-        self.progress_container = QVBoxLayout()
-        layout.addLayout(self.progress_container)
+        # Status and progress section
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -199,11 +207,11 @@ class AnalyzePanel(QWidget):
         weight = value / SLIDER_SCALE
         setattr(self.settings, f"{detector}_weight", weight)
         label = getattr(self, f"{detector}_label")
-        label.setText(f"{weight:.2f}")
+        label.setText(f"{value}%")
 
     def _on_threshold_changed(self, value: int) -> None:
         self.settings.score_threshold = value / SLIDER_SCALE
-        self.threshold_label.setText(f"{value / SLIDER_SCALE:.2f}")
+        self.threshold_label.setText(f"{value}%")
 
     def _open_prompt_editor(self) -> None:
         """Open a dialog with the PromptEditor widget."""
@@ -230,14 +238,8 @@ class AnalyzePanel(QWidget):
         if not self.project.sources:
             return
 
-        # Build progress bars
-        self._clear_progress_bars()
-        for source in self.project.sources:
-            bar = QProgressBar()
-            bar.setRange(0, 100)
-            bar.setFormat(f"%p% - {source.path}")
-            self._progress_bars[source.path] = bar
-            self.progress_container.addWidget(bar)
+        self._total_files = len(self.project.sources)
+        self._completed_files = 0
 
         video_paths = [(s.path, s.duration) for s in self.project.sources]
         self._worker = AnalysisWorker(video_paths, self.settings)
@@ -245,7 +247,12 @@ class AnalyzePanel(QWidget):
         self._worker.file_complete.connect(self._on_file_complete)
         self._worker.all_complete.connect(self._on_all_complete)
         self._worker.error.connect(self._on_error)
+        self._worker.status.connect(self._on_status)
 
+        n = self._total_files
+        self.status_label.setText(f"Analyzing {n} video{'s' if n != 1 else ''}...")
+        self.progress_bar.setValue(0)
+        self.progress_bar.show()
         self.analyze_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self._worker.start()
@@ -254,33 +261,47 @@ class AnalyzePanel(QWidget):
         """Request cancellation of the running worker."""
         if self._worker:
             self._worker.cancel()
+            self.status_label.setText("Cancelling...")
+
+    def _on_status(self, message: str) -> None:
+        self.status_label.setText(message)
 
     def _on_progress(self, source_path: str, fraction: float) -> None:
-        bar = self._progress_bars.get(source_path)
-        if bar:
-            bar.setValue(int(fraction * 100))
+        # Overall progress = (completed files + current file fraction) / total files
+        overall = (self._completed_files + fraction) / self._total_files
+        self.progress_bar.setValue(int(overall * 100))
+        basename = Path(source_path).name
+        self.status_label.setText(
+            f"Analyzing {basename} "
+            f"({self._completed_files + 1} of {self._total_files})..."
+        )
 
     def _on_file_complete(self, source_path: str) -> None:
-        bar = self._progress_bars.get(source_path)
-        if bar:
-            bar.setValue(100)
+        self._completed_files += 1
+        basename = Path(source_path).name
+        self.status_label.setText(
+            f"Completed {basename} ({self._completed_files} of {self._total_files})"
+        )
 
     def _on_all_complete(self, moments: list) -> None:
+        n = self._total_files
+        count = len(moments)
+        self.status_label.setText(
+            f"Analysis complete \u2014 found {count} highlight{'s' if count != 1 else ''} "
+            f"in {n} video{'s' if n != 1 else ''}"
+        )
+        self.progress_bar.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
         self.analysis_complete.emit(moments)
 
     def _on_error(self, message: str) -> None:
+        self.status_label.setText(f"Error: {message}")
+        self.progress_bar.hide()
         self.analyze_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self._worker = None
-
-    def _clear_progress_bars(self) -> None:
-        for bar in self._progress_bars.values():
-            bar.setParent(None)
-            bar.deleteLater()
-        self._progress_bars.clear()
 
     @property
     def is_analyzing(self) -> bool:

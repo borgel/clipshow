@@ -94,11 +94,11 @@ class TestSliderBinding:
 
     def test_slider_updates_label(self, panel):
         panel.scene_slider.setValue(45)
-        assert panel.scene_label.text() == "0.45"
+        assert panel.scene_label.text() == "45%"
 
     def test_threshold_updates_label(self, panel):
         panel.threshold_slider.setValue(55)
-        assert panel.threshold_label.text() == "0.55"
+        assert panel.threshold_label.text() == "55%"
 
 
 class TestEditPromptsButton:
@@ -129,11 +129,11 @@ class TestStartAnalysis:
         assert empty_panel._worker is None
 
     @patch.object(AnalysisWorker, "start")
-    def test_creates_progress_bars(self, mock_start, panel):
+    def test_shows_status_and_progress(self, mock_start, panel):
         panel.start_analysis()
-        assert len(panel._progress_bars) == 2
-        assert "/tmp/a.mp4" in panel._progress_bars
-        assert "/tmp/b.mp4" in panel._progress_bars
+        assert not panel.progress_bar.isHidden()
+        assert "2 videos" in panel.status_label.text()
+        assert panel._total_files == 2
 
     @patch.object(AnalysisWorker, "start")
     def test_disables_analyze_button(self, mock_start, panel):
@@ -148,19 +148,26 @@ class TestStartAnalysis:
 
 class TestProgressSignals:
     def test_progress_updates_bar(self, panel):
-        panel._progress_bars["/tmp/a.mp4"] = MagicMock()
+        panel._total_files = 2
+        panel._completed_files = 0
         panel._on_progress("/tmp/a.mp4", 0.5)
-        panel._progress_bars["/tmp/a.mp4"].setValue.assert_called_with(50)
+        # Overall: (0 + 0.5) / 2 = 25%
+        assert panel.progress_bar.value() == 25
+        assert "a.mp4" in panel.status_label.text()
 
-    def test_file_complete_sets_100(self, panel):
-        panel._progress_bars["/tmp/a.mp4"] = MagicMock()
+    def test_file_complete_updates_status(self, panel):
+        panel._total_files = 2
+        panel._completed_files = 0
         panel._on_file_complete("/tmp/a.mp4")
-        panel._progress_bars["/tmp/a.mp4"].setValue.assert_called_with(100)
+        assert panel._completed_files == 1
+        assert "Completed a.mp4" in panel.status_label.text()
 
-    def test_unknown_path_no_crash(self, panel):
-        """Progress for unknown path should not crash."""
-        panel._on_progress("/tmp/unknown.mp4", 0.5)
-        panel._on_file_complete("/tmp/unknown.mp4")
+    def test_progress_with_completed_files(self, panel):
+        panel._total_files = 2
+        panel._completed_files = 1
+        panel._on_progress("/tmp/b.mp4", 0.5)
+        # Overall: (1 + 0.5) / 2 = 75%
+        assert panel.progress_bar.value() == 75
 
 
 class TestAnalysisComplete:
