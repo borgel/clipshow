@@ -342,31 +342,35 @@ class TestFusionMath:
 
     def test_audio_weight_affects_fusion(self, static_video):
         """Different audio_weight values should produce different scores."""
-        rng = np.random.default_rng(123)
+        dim = 16
+        rng = np.random.default_rng(42)
+
+        # Create structured embeddings where video and audio produce
+        # different similarity patterns with text prompts.
+        video_emb = rng.standard_normal((5, dim)).astype(np.float32)
+        video_emb /= np.linalg.norm(video_emb, axis=1, keepdims=True)
+        audio_emb = rng.standard_normal((5, dim)).astype(np.float32)
+        audio_emb /= np.linalg.norm(audio_emb, axis=1, keepdims=True)
+
+        # CRITICAL: positive and negative text embeddings must DIFFER,
+        # otherwise raw = max_pos - max_neg = 0 regardless of fusion.
+        text_pos = rng.standard_normal((4, dim)).astype(np.float32)
+        text_pos /= np.linalg.norm(text_pos, axis=1, keepdims=True)
+        text_neg = rng.standard_normal((4, dim)).astype(np.float32)
+        text_neg /= np.linalg.norm(text_neg, axis=1, keepdims=True)
 
         def run_with_weight(weight):
             detector = _make_detector_with_mock_sessions(audio_weight=weight)
-            # Use deterministic mock output
             detector._video_session.run.side_effect = None
             detector._audio_session.run.side_effect = None
-            detector._text_session.run.side_effect = None
 
-            video_emb = rng.standard_normal((5, EMBEDDING_DIM)).astype(
-                np.float32
-            )
-            video_emb /= np.linalg.norm(video_emb, axis=1, keepdims=True)
-            audio_emb = rng.standard_normal((5, EMBEDDING_DIM)).astype(
-                np.float32
-            )
-            audio_emb /= np.linalg.norm(audio_emb, axis=1, keepdims=True)
-            text_emb = rng.standard_normal((4, EMBEDDING_DIM)).astype(
-                np.float32
-            )
-            text_emb /= np.linalg.norm(text_emb, axis=1, keepdims=True)
-
-            detector._video_session.run.return_value = [video_emb]
-            detector._audio_session.run.return_value = [audio_emb]
-            detector._text_session.run.return_value = [text_emb]
+            detector._video_session.run.return_value = [video_emb.copy()]
+            detector._audio_session.run.return_value = [audio_emb.copy()]
+            # Text session is called twice: once for pos, once for neg prompts
+            detector._text_session.run.side_effect = [
+                [text_pos.copy()],
+                [text_neg.copy()],
+            ]
 
             with patch(
                 "clipshow.detection.audiovisual.extract_mel_windows",
