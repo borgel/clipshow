@@ -109,6 +109,14 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.emotion_label)
         weights_layout.addRow("Emotion:", row)
 
+        weights_help = QLabel(
+            "Control how much each detector contributes to the highlight score. "
+            "Higher weight = more influence."
+        )
+        weights_help.setWordWrap(True)
+        weights_help.setStyleSheet("color: gray;")
+        weights_layout.addRow(weights_help)
+
         weights_group.setLayout(weights_layout)
         layout.addWidget(weights_group)
 
@@ -123,6 +131,14 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.threshold_slider)
         row.addWidget(self.threshold_label)
         threshold_layout.addRow("Score threshold:", row)
+
+        threshold_help = QLabel(
+            "Minimum combined score for a moment to become a highlight. "
+            "Lower = more highlights, higher = only the best."
+        )
+        threshold_help.setWordWrap(True)
+        threshold_help.setStyleSheet("color: gray;")
+        threshold_layout.addRow(threshold_help)
 
         threshold_group.setLayout(threshold_layout)
         layout.addWidget(threshold_group)
