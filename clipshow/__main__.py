@@ -29,14 +29,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output", "-o",
         type=str,
-        default="highlight_reel.mp4",
+        default=None,
         help="Output file path (default: highlight_reel.mp4)",
     )
     parser.add_argument(
         "--workers", "-j",
         type=int,
-        default=0,
+        default=None,
         help="Number of parallel workers (default: auto = CPU count)",
+    )
+    parser.add_argument(
+        "--config", "-c",
+        type=str,
+        default=None,
+        help="Path to a YAML pipeline configuration file",
     )
     parser.add_argument(
         "--version",
@@ -55,7 +61,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.auto:
         from clipshow.app import run_auto_mode
 
-        return run_auto_mode(args.files, args.output, headless=args.headless, workers=args.workers)
+        # Load YAML config if provided
+        config = None
+        if args.config:
+            from clipshow.yaml_config import load_pipeline_config
+
+            config = load_pipeline_config(args.config)
+
+        # Precedence: CLI positional args > YAML inputs
+        files = args.files if args.files else (config.inputs if config else [])
+
+        # Precedence: CLI --output > YAML output.path > default
+        output = args.output or (config.output_path if config else None) or "highlight_reel.mp4"
+
+        # Precedence: CLI --workers > YAML workers > default
+        workers = args.workers if args.workers is not None else (
+            config.workers if config and config.workers is not None else 0
+        )
+
+        return run_auto_mode(files, output, headless=args.headless, workers=workers, config=config)
     else:
         from clipshow.app import run_gui
 

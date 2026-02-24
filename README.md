@@ -118,7 +118,55 @@ clipshow --auto --headless --output reel.mp4 *.mp4
 | `--auto` | Run automatic mode (no full UI) |
 | `--headless` | Suppress all GUI (implies `--auto`) |
 | `--output`, `-o` | Output file path (default: `highlight_reel.mp4`) |
+| `--workers`, `-j` | Number of parallel workers (default: auto = CPU count) |
+| `--config`, `-c` | Path to a YAML pipeline configuration file |
 | `--version` | Print version and exit |
+
+### Pipeline configuration file
+
+For repeatable batch processing, create a YAML config file instead of passing all settings as CLI flags:
+
+```bash
+clipshow --auto --config pipeline.yaml
+```
+
+Example `pipeline.yaml`:
+
+```yaml
+inputs:
+  - "vacation/*.mp4"
+  - "party/clip1.mov"
+
+output:
+  path: "highlight_reel.mp4"
+  codec: libx264
+  fps: 30.0
+  bitrate: "8M"
+
+detectors:
+  scene: 0.3
+  audio: 0.25
+  motion: 0.25
+  semantic: 0.0
+  emotion: 0.2
+
+semantic:
+  prompts:
+    - "exciting moment"
+  negative_prompts:
+    - "boring static shot"
+
+segments:
+  threshold: 0.5
+  min_duration: 1.0
+  max_duration: 15.0
+  pre_padding: 1.0
+  post_padding: 1.5
+
+workers: 0
+```
+
+All sections are optional. Glob patterns in `inputs` resolve relative to the YAML file's directory. CLI arguments (`--output`, positional files, `--workers`) take precedence over values in the config file.
 
 ## Customizing Detection
 

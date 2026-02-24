@@ -28,6 +28,7 @@ def run_auto_mode(
     output_path: str,
     headless: bool = False,
     workers: int = 0,
+    config: object | None = None,
 ) -> int:
     """Run automatic highlight reel generation.
 
@@ -47,7 +48,13 @@ def run_auto_mode(
     from clipshow.export.ffprobe import extract_metadata
     from clipshow.model.moments import HighlightSegment
 
-    settings = Settings()
+    if config is not None:
+        from clipshow.yaml_config import apply_config_to_settings
+
+        settings = apply_config_to_settings(config)
+    else:
+        settings = Settings()
+
     # CLI auto mode uses sensible defaults when no detectors are configured
     if not settings.enabled_detectors:
         settings.scene_weight = 0.3
