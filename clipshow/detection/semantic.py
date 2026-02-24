@@ -52,6 +52,11 @@ class SemanticDetector(Detector):
                 "onnx_clip is not installed. Install with: "
                 "pip install onnx_clip onnxruntime"
             )
+        # Suppress noisy CoreML warnings on macOS (CLIP only supports 30/889
+        # nodes via CoreML, so ORT falls back to CPU anyway).
+        import onnxruntime as ort
+
+        ort.set_default_logger_severity(3)  # 3 = ERROR only
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         self._model = onnx_clip.OnnxClip(batch_size=1)
         return self._model
