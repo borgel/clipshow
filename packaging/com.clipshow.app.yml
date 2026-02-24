@@ -45,6 +45,7 @@ modules:
     build-commands:
       - install -Dm644 com.clipshow.app.desktop /app/share/applications/com.clipshow.app.desktop
       - install -Dm644 com.clipshow.app.metainfo.xml /app/share/metainfo/com.clipshow.app.metainfo.xml
+      - install -Dm644 com.clipshow.app.svg /app/share/icons/hicolor/scalable/apps/com.clipshow.app.svg
     sources:
       - type: dir
         path: .
