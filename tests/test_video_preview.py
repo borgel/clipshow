@@ -53,7 +53,8 @@ class TestLoad:
         preview.load(fake_video)
         preview.player.setSource.assert_called_once()
         url = preview.player.setSource.call_args[0][0]
-        assert url.toLocalFile() == fake_video
+        # QUrl normalizes path separators to forward slashes on Windows
+        assert url == QUrl.fromLocalFile(fake_video)
 
     def test_load_missing_file_skips(self, preview):
         """Loading a non-existent file should not call setSource."""
@@ -105,7 +106,8 @@ class TestSegmentPlayback:
         preview.play_segment(fake_video, 1000, 5000)
         preview.player.setSource.assert_called_once()
         url = preview.player.setSource.call_args[0][0]
-        assert url.toLocalFile() == fake_video
+        # QUrl normalizes path separators to forward slashes on Windows
+        assert url == QUrl.fromLocalFile(fake_video)
 
     def test_play_segment_sets_position(self, preview, fake_video):
         preview.player.play = MagicMock()

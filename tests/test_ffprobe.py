@@ -57,8 +57,8 @@ class TestExtractMetadata:
 
     def test_scene_change_video_metadata(self, scene_change_video):
         source = extract_metadata(scene_change_video)
-        assert source.width == 160
-        assert source.height == 120
+        assert source.width == 320
+        assert source.height == 240
         assert source.duration == pytest.approx(2.0, abs=0.2)
 
     def test_motion_video_metadata(self, motion_video):

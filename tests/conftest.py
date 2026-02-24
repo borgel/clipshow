@@ -82,18 +82,23 @@ def static_video(tmp_video_dir):
 
 @pytest.fixture(scope="session")
 def scene_change_video(tmp_video_dir):
-    """Video with abrupt color change at 50% mark. 2s @ 24fps, 160x120."""
+    """Video with abrupt color change at 50% mark. 2s @ 30fps, 320x240.
+
+    Uses higher resolution and extreme color change (black → white) to
+    ensure PySceneDetect reliably detects the scene change across all
+    FFmpeg versions in CI.
+    """
     path = os.path.join(tmp_video_dir, "scene_change.mp4")
 
     def make_frame(t):
-        frame = np.zeros((120, 160, 3), dtype=np.uint8)
+        frame = np.zeros((240, 320, 3), dtype=np.uint8)
         if t < 1.0:
-            frame[:, :] = [200, 40, 40]  # Red first half
+            frame[:, :] = [0, 0, 0]  # Pure black first half
         else:
-            frame[:, :] = [40, 200, 40]  # Green second half
+            frame[:, :] = [255, 255, 255]  # Pure white second half
         return frame
 
-    _make_video(path, duration=2.0, fps=24, size=(160, 120), make_frame=make_frame)
+    _make_video(path, duration=2.0, fps=30, size=(320, 240), make_frame=make_frame)
     return path
 
 
