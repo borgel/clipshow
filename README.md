@@ -14,42 +14,46 @@ ClipShow runs several **detectors** on your video files:
 
 Each detector produces a score over time. ClipShow combines these scores using weights you control, then picks segments that rise above a threshold. You can preview, reorder, and trim those segments before exporting the final highlight reel.
 
-## Prerequisites
-
-- **Python 3.11 or 3.12**
-- **FFmpeg** — must be installed and available in your system PATH
-
-### Installing FFmpeg
-
-| OS | Command |
-|----|---------|
-| macOS | `brew install ffmpeg` |
-| Windows | `winget install ffmpeg` or `choco install ffmpeg -y` |
-| Ubuntu/Debian | `sudo apt install ffmpeg` |
-| Fedora | `sudo dnf install ffmpeg` |
-
 ## Installation
 
-Clone the repository and install in editable mode:
+### Download (recommended)
+
+Grab the latest build for your platform from the [Releases page](https://github.com/borgel/clipshow/releases):
+
+| Platform | Download |
+|----------|----------|
+| macOS (Apple Silicon) | `ClipShow-*.dmg` |
+| Windows | `ClipShow-*-setup.exe` |
+| Linux | `ClipShow-*.flatpak` |
+
+FFmpeg is bundled in the release builds — no extra setup needed.
+
+### Install from source
+
+If you prefer to run from source or want to contribute:
+
+**Prerequisites:**
+- Python 3.11 or 3.12
+- FFmpeg installed and on your PATH (`brew install ffmpeg` / `sudo apt install ffmpeg` / `choco install ffmpeg -y`)
 
 ```bash
 git clone https://github.com/borgel/clipshow.git
 cd clipshow
-pip install -e .
+uv sync
 ```
 
-### Optional dependencies
+#### Optional dependencies
 
 For AI-powered semantic detection (CLIP model, ~340 MB download on first use):
 
 ```bash
-pip install -e ".[semantic]"
+uv sync --extra semantic
 ```
 
 For face/emotion detection:
 
 ```bash
-pip install -e ".[emotion]"
+uv sync --extra emotion
 ```
 
 ## Usage
@@ -57,7 +61,8 @@ pip install -e ".[emotion]"
 ### GUI mode (default)
 
 ```bash
-clipshow
+clipshow          # from a release build
+uv run clipshow   # from source
 ```
 
 This opens the four-step workflow:
@@ -140,7 +145,7 @@ You can customize these in the Analyze panel (click "Edit Prompts...") or in Pre
 ```bash
 git clone https://github.com/borgel/clipshow.git
 cd clipshow
-pip install -e ".[test]"
+uv sync --extra test
 ```
 
 ### Running tests
