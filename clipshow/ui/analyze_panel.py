@@ -138,6 +138,12 @@ class AnalyzePanel(QWidget):
         row.addWidget(self.emotion_label)
         weights_layout.addRow("Emotion:", row)
 
+        self.auto_balance_check = QCheckBox("Auto-balance weights")
+        self.auto_balance_check.setToolTip(
+            "Divide 100% evenly among enabled detectors"
+        )
+        weights_layout.addRow(self.auto_balance_check)
+
         weights_help = QLabel(
             "Control how much each detector contributes to the highlight score. "
             "Higher weight = more influence."
@@ -257,6 +263,7 @@ class AnalyzePanel(QWidget):
         )
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
 
+        self.auto_balance_check.toggled.connect(self._on_auto_balance_toggled)
         self.edit_prompts_button.clicked.connect(self._open_prompt_editor)
         self.analyze_button.clicked.connect(self.start_analysis)
         self.cancel_button.clicked.connect(self.cancel_analysis)
@@ -278,11 +285,50 @@ class AnalyzePanel(QWidget):
         self.semantic_check.setChecked(self.settings.semantic_weight > 0)
         self.emotion_check.setChecked(self.settings.emotion_weight > 0)
 
+    _DETECTOR_NAMES = ("scene", "audio", "motion", "semantic", "emotion")
+
     def _on_check_toggled(self, detector: str, enabled: bool) -> None:
         slider = getattr(self, f"{detector}_slider")
-        slider.setEnabled(enabled)
+        if self.auto_balance_check.isChecked():
+            # In auto-balance mode, sliders stay disabled; rebalance all
+            slider.setEnabled(False)
+            if not enabled:
+                slider.setValue(0)
+            self._rebalance_weights()
+        else:
+            slider.setEnabled(enabled)
+            if not enabled:
+                slider.setValue(0)
+
+    def _on_auto_balance_toggled(self, enabled: bool) -> None:
+        """Toggle auto-balance mode for detector weights."""
+        if enabled:
+            self._rebalance_weights()
+        # Enable/disable sliders for checked detectors
+        for name in self._DETECTOR_NAMES:
+            check = getattr(self, f"{name}_check")
+            slider = getattr(self, f"{name}_slider")
+            if enabled:
+                slider.setEnabled(False)
+            else:
+                slider.setEnabled(check.isChecked())
+
+    def _rebalance_weights(self) -> None:
+        """Set all enabled detector sliders to equal share of 100."""
+        enabled = [
+            name
+            for name in self._DETECTOR_NAMES
+            if getattr(self, f"{name}_check").isChecked()
+        ]
         if not enabled:
-            slider.setValue(0)
+            return
+        per_detector = SLIDER_SCALE // len(enabled)
+        for name in self._DETECTOR_NAMES:
+            slider = getattr(self, f"{name}_slider")
+            if name in enabled:
+                slider.setValue(per_detector)
+            else:
+                slider.setValue(0)
 
     def _on_slider_changed(self, detector: str, value: int) -> None:
         weight = value / SLIDER_SCALE
