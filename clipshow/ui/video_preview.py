@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtCore import QUrl, Signal, Slot
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+
+logger = logging.getLogger(__name__)
 
 
 class VideoPreview(QWidget):
@@ -48,6 +52,27 @@ class VideoPreview(QWidget):
         self.pause_button.clicked.connect(self.pause)
         self.player.playbackStateChanged.connect(self._on_state_changed)
         self.player.positionChanged.connect(self._check_segment_end)
+        self.player.errorOccurred.connect(self._on_error)
+
+    def _on_error(self, error: QMediaPlayer.Error, message: str) -> None:
+        """Handle media player errors gracefully instead of crashing."""
+        logger.warning("Media player error (%s): %s", error, message)
+        self.player.stop()
+
+    def cleanup(self) -> None:
+        """Stop playback and release media resources.
+
+        Call before widget destruction to avoid segfaults from the
+        underlying FFmpeg backend trying to finalize during teardown.
+        """
+        self.player.stop()
+        self.player.setSource(QUrl())
+        self.player.setVideoOutput(None)
+        self.player.setAudioOutput(None)
+
+    def closeEvent(self, event) -> None:
+        self.cleanup()
+        super().closeEvent(event)
 
     def load(self, path: str) -> None:
         """Load a video file for playback."""

@@ -24,7 +24,7 @@ jobs:
 
       - name: Install FFmpeg (Ubuntu)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libegl1-mesa
 
       - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'
@@ -59,4 +59,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-screenshots-${{ matrix.os }}
-          path: tests/baselines/*_diff.png
+          path: tests/baselines/**/*_diff.png

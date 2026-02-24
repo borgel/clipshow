@@ -7,6 +7,7 @@ On failure, saves diff artifacts next to the baseline for debugging.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +24,8 @@ from clipshow.ui.import_panel import ImportPanel
 from clipshow.ui.main_window import MainWindow
 from clipshow.ui.review_panel import ReviewPanel
 
-BASELINES_DIR = Path(__file__).parent / "baselines"
+# Baselines are platform-specific because Qt renders differently per OS.
+BASELINES_DIR = Path(__file__).parent / "baselines" / sys.platform
 CAPTURE_SIZE = QSize(800, 600)
 SSIM_THRESHOLD = 0.95
 
@@ -41,7 +43,11 @@ def _capture_widget(widget, size: QSize = CAPTURE_SIZE) -> np.ndarray:
     """Grab a screenshot of a widget at the given size."""
     widget.resize(size)
     pixmap = widget.grab()
-    return _qimage_to_array(pixmap.toImage())
+    img = pixmap.toImage()
+    # Normalize to expected size — high-DPI displays may produce larger grabs
+    if img.width() != size.width() or img.height() != size.height():
+        img = img.scaled(size)
+    return _qimage_to_array(img)
 
 
 def _save_image(arr: np.ndarray, path: Path) -> None:
