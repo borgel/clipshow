@@ -1,6 +1,8 @@
-"""Face/emotion detection via MediaPipe + deepface-onnx (no TensorFlow).
+"""Face/emotion detection via OpenCV + emotion-ferplus ONNX model.
 
-Lazy-loads mediapipe and deepface_onnx on first use. Samples at 3 FPS.
+Uses OpenCV's Haar cascade for face detection and a small ONNX model
+(emotion-ferplus-8, ~35KB) for emotion classification. Downloads model
+to ~/.clipshow/models/ on first use. Samples at 3 FPS.
 Scores frames higher when faces show positive/high-energy emotions
 (happy, surprise).
 """
@@ -8,52 +10,80 @@ Scores frames higher when faces show positive/high-energy emotions
 from __future__ import annotations
 
 import importlib
+import logging
+import urllib.request
+from pathlib import Path
 
 import cv2
 import numpy as np
 
 from clipshow.detection.base import Detector, DetectorResult
 
+logger = logging.getLogger(__name__)
+
 SAMPLE_FPS = 3
-POSITIVE_EMOTIONS = {"happy", "surprise"}
+POSITIVE_EMOTIONS = {"happiness", "surprise"}
 NEUTRAL_SCORE = 0.2  # Score for neutral faces (still somewhat interesting)
+MODEL_DIR = Path.home() / ".clipshow" / "models"
+MODEL_FILENAME = "emotion-ferplus-8.onnx"
+MODEL_URL = (
+    "https://github.com/onnx/models/raw/main/validated/vision/"
+    "body_analysis/emotion_ferplus/model/emotion-ferplus-8.onnx"
+)
+
+# emotion-ferplus output labels in order
+EMOTION_LABELS = [
+    "neutral",
+    "happiness",
+    "surprise",
+    "sadness",
+    "anger",
+    "disgust",
+    "fear",
+    "contempt",
+]
 
 
 class EmotionDetector(Detector):
     """Face detection + emotion scoring.
 
-    Uses MediaPipe for face detection and deepface-onnx for emotion
-    classification. Returns higher scores for positive/high-energy emotions.
+    Uses OpenCV Haar cascade for face detection and emotion-ferplus ONNX
+    model for emotion classification. Returns higher scores for
+    positive/high-energy emotions.
     """
 
     name = "emotion"
 
     def __init__(self, time_step: float = 0.1):
         self._time_step = time_step
-        self._face_detector = None
-        self._emotion_model = None
+        self._face_cascade = None
+        self._emotion_session = None
 
     def _load_models(self):
-        """Lazy-load face detection and emotion models."""
+        """Lazy-load face detection cascade and emotion ONNX model."""
         try:
-            mp = importlib.import_module("mediapipe")
+            ort = importlib.import_module("onnxruntime")
         except ImportError:
             raise RuntimeError(
-                "mediapipe is not installed. Install with: pip install mediapipe"
+                "onnxruntime is not installed. Install with: "
+                "uv sync --extra emotion"
             )
 
-        try:
-            deepface_onnx = importlib.import_module("deepface_onnx")
-        except ImportError:
-            raise RuntimeError(
-                "deepface-onnx is not installed. Install with: pip install deepface-onnx"
-            )
+        # OpenCV Haar cascade for face detection (bundled with opencv-python-headless)
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        self._face_cascade = cv2.CascadeClassifier(cascade_path)
 
-        self._face_detector = mp.solutions.face_detection.FaceDetection(
-            model_selection=0,
-            min_detection_confidence=0.5,
+        # Download emotion-ferplus ONNX model if needed
+        model_path = MODEL_DIR / MODEL_FILENAME
+        if not model_path.exists():
+            logger.info("Downloading emotion-ferplus model to %s", model_path)
+            MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(MODEL_URL, model_path)
+
+        self._emotion_session = ort.InferenceSession(
+            str(model_path),
+            providers=["CPUExecutionProvider"],
         )
-        self._emotion_model = deepface_onnx
 
     def detect(
         self,
@@ -61,7 +91,7 @@ class EmotionDetector(Detector):
         progress_callback: callable | None = None,
         cancel_flag: callable | None = None,
     ) -> DetectorResult:
-        if self._face_detector is None:
+        if self._face_cascade is None:
             self._load_models()
 
         cap = cv2.VideoCapture(video_path)
@@ -115,28 +145,22 @@ class EmotionDetector(Detector):
 
     def _score_frame(self, frame: np.ndarray) -> float:
         """Score a single frame for face/emotion content."""
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self._face_detector.process(rgb)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self._face_cascade.detectMultiScale(
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+        )
 
-        if not results.detections:
+        if len(faces) == 0:
             return 0.0
 
         max_score = 0.0
-        for detection in results.detections:
-            bbox = detection.location_data.relative_bounding_box
-            h, w = frame.shape[:2]
-            x1 = max(0, int(bbox.xmin * w))
-            y1 = max(0, int(bbox.ymin * h))
-            x2 = min(w, int((bbox.xmin + bbox.width) * w))
-            y2 = min(h, int((bbox.ymin + bbox.height) * h))
-
-            if x2 <= x1 or y2 <= y1:
+        for x, y, w, h in faces:
+            face_crop = gray[y : y + h, x : x + w]
+            if face_crop.size == 0:
                 continue
 
-            face_crop = frame[y1:y2, x1:x2]
             try:
-                emotions = self._emotion_model.analyze(face_crop)
-                dominant = emotions.get("dominant_emotion", "")
+                dominant = self._classify_emotion(face_crop)
                 if dominant in POSITIVE_EMOTIONS:
                     max_score = max(max_score, 1.0)
                 elif dominant == "neutral":
@@ -144,7 +168,23 @@ class EmotionDetector(Detector):
                 else:
                     max_score = max(max_score, 0.1)
             except Exception:
-                # Face crop too small or model error — skip
+                # Face crop too small or model error -- skip
                 max_score = max(max_score, 0.1)
 
         return max_score
+
+    def _classify_emotion(self, gray_face: np.ndarray) -> str:
+        """Run emotion-ferplus ONNX model on a grayscale face crop."""
+        # emotion-ferplus expects 1x1x64x64 float32 input
+        resized = cv2.resize(gray_face, (64, 64)).astype(np.float32)
+        tensor = resized.reshape(1, 1, 64, 64)
+
+        input_name = self._emotion_session.get_inputs()[0].name
+        outputs = self._emotion_session.run(None, {input_name: tensor})
+
+        # Softmax over logits to get probabilities
+        logits = outputs[0][0]
+        exp_logits = np.exp(logits - np.max(logits))
+        probs = exp_logits / exp_logits.sum()
+
+        return EMOTION_LABELS[int(np.argmax(probs))]
