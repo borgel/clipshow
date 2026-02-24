@@ -1,4 +1,9 @@
-"""UI tests: video preview widget with mocked QMediaPlayer."""
+"""UI tests: video preview widget with mocked QMediaPlayer.
+
+All tests mock player.setSource to prevent the FFmpeg backend from
+running in a background thread, which causes segfaults during
+pytest teardown in CI (macOS, Ubuntu, Windows).
+"""
 
 from unittest.mock import MagicMock
 
@@ -11,9 +16,11 @@ from clipshow.ui.video_preview import VideoPreview
 
 @pytest.fixture()
 def preview(qtbot):
-    """Fresh VideoPreview widget with proper cleanup to prevent segfaults."""
+    """Fresh VideoPreview widget with mocked setSource to prevent FFmpeg crashes."""
     p = VideoPreview()
     qtbot.addWidget(p)
+    # Prevent FFmpeg backend from running — it crashes in headless CI
+    p.player.setSource = MagicMock()
     yield p
     p.cleanup()
 
@@ -44,14 +51,15 @@ class TestLoad:
 
     def test_load_sets_source(self, preview, fake_video):
         preview.load(fake_video)
-        source = preview.player.source()
-        assert source.toLocalFile() == fake_video
+        preview.player.setSource.assert_called_once()
+        url = preview.player.setSource.call_args[0][0]
+        assert url.toLocalFile() == fake_video
 
     def test_load_missing_file_skips(self, preview):
-        """Loading a non-existent file should not set source (avoids segfault)."""
+        """Loading a non-existent file should not call setSource."""
         preview.load("/nonexistent/video.mp4")
         assert preview.play_button.isEnabled() is False
-        assert preview.player.source() == QUrl()
+        preview.player.setSource.assert_not_called()
 
 
 class TestPlayPause:
@@ -95,8 +103,9 @@ class TestSegmentPlayback:
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
         preview.play_segment(fake_video, 1000, 5000)
-        source = preview.player.source()
-        assert source.toLocalFile() == fake_video
+        preview.player.setSource.assert_called_once()
+        url = preview.player.setSource.call_args[0][0]
+        assert url.toLocalFile() == fake_video
 
     def test_play_segment_sets_position(self, preview, fake_video):
         preview.player.play = MagicMock()
@@ -115,7 +124,7 @@ class TestSegmentPlayback:
         preview.player.play = MagicMock()
         preview.play_segment("/nonexistent/video.mp4", 0, 5000)
         preview.player.play.assert_not_called()
-        assert preview.player.source() == QUrl()
+        preview.player.setSource.assert_not_called()
 
     def test_segment_end_pauses_playback(self, preview):
         preview._segment_end = 5000
@@ -159,7 +168,11 @@ class TestCleanup:
     def test_cleanup_clears_source(self, preview, fake_video):
         preview.load(fake_video)
         preview.cleanup()
-        assert preview.player.source() == QUrl()
+        # setSource should have been called twice: once for load, once for cleanup
+        assert preview.player.setSource.call_count == 2
+        # Last call should clear the source
+        last_url = preview.player.setSource.call_args[0][0]
+        assert last_url == QUrl()
 
     def test_cleanup_detaches_video_output(self, preview):
         preview.player.setVideoOutput = MagicMock()

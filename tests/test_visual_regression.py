@@ -153,8 +153,11 @@ def _make_sample_segments() -> list[HighlightSegment]:
 class TestMainWindowVisual:
     @pytest.fixture(autouse=True)
     def _window(self, qtbot):
+        from unittest.mock import MagicMock
+
         self.window = MainWindow()
         qtbot.addWidget(self.window)
+        self.window.review_panel.video_preview.player.setSource = MagicMock()
         yield
         self.window.review_panel.video_preview.cleanup()
 
@@ -230,8 +233,11 @@ class TestAnalyzePanelVisual:
 class TestReviewPanelVisual:
     @pytest.fixture(autouse=True)
     def _panel(self, qtbot):
+        from unittest.mock import MagicMock
+
         self.panel = ReviewPanel()
         qtbot.addWidget(self.panel)
+        self.panel.video_preview.player.setSource = MagicMock()
         yield
         self.panel.video_preview.cleanup()
 

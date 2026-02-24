@@ -7,6 +7,7 @@ Skipped automatically if no fixture videos are present.
 import glob
 import os
 import tempfile
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -36,6 +37,7 @@ def window_with_settings(qtbot):
     )
     w = MainWindow(settings=settings)
     qtbot.addWidget(w)
+    w.review_panel.video_preview.player.setSource = MagicMock()
     yield w
     w.review_panel.video_preview.cleanup()
 
@@ -248,6 +250,7 @@ class TestRealVideoParallel:
         )
         window = MainWindow(settings=settings)
         qtbot.addWidget(window)
+        window.review_panel.video_preview.player.setSource = MagicMock()
 
         try:
             window.import_panel.add_files(videos)

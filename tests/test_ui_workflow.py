@@ -1,6 +1,6 @@
 """E2E UI test: full Import → Analyze → Review → Export workflow."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,6 +15,8 @@ from clipshow.workers.export_worker import ExportWorker
 def window(qtbot):
     w = MainWindow()
     qtbot.addWidget(w)
+    # Prevent FFmpeg backend from running — it crashes in headless CI
+    w.review_panel.video_preview.player.setSource = MagicMock()
     yield w
     w.review_panel.video_preview.cleanup()
 
