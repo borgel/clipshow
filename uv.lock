@@ -140,6 +140,9 @@ all = [
     { name = "onnx-clip" },
     { name = "onnxruntime" },
 ]
+audiovisual = [
+    { name = "onnxruntime" },
+]
 emotion = [
     { name = "onnxruntime" },
 ]
@@ -164,6 +167,7 @@ requires-dist = [
     { name = "onnx-clip", marker = "extra == 'all'" },
     { name = "onnx-clip", marker = "extra == 'semantic'" },
     { name = "onnxruntime", marker = "extra == 'all'" },
+    { name = "onnxruntime", marker = "extra == 'audiovisual'" },
     { name = "onnxruntime", marker = "extra == 'emotion'" },
     { name = "onnxruntime", marker = "extra == 'semantic'" },
     { name = "opencv-python-headless", specifier = ">=4.8" },
@@ -177,7 +181,7 @@ requires-dist = [
     { name = "scenedetect", extras = ["opencv"], specifier = ">=0.6.2" },
     { name = "scikit-image", marker = "extra == 'test'", specifier = ">=0.21" },
 ]
-provides-extras = ["semantic", "emotion", "all", "test"]
+provides-extras = ["semantic", "emotion", "audiovisual", "all", "test"]
 
 [[package]]
 name = "colorama"
