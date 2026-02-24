@@ -14,6 +14,16 @@ ClipShow runs several **detectors** on your video files:
 
 Each detector produces a score over time. ClipShow combines these scores using weights you control, then picks segments that rise above a threshold. You can preview, reorder, and trim those segments before exporting the final highlight reel.
 
+## Screenshots
+
+| Import | Analyze |
+|--------|---------|
+| ![Import panel](docs/screenshots/import.png) | ![Analyze panel](docs/screenshots/analyze.png) |
+
+| Review | Export |
+|--------|--------|
+| ![Review panel](docs/screenshots/review.png) | ![Export panel](docs/screenshots/export.png) |
+
 ## Installation
 
 ### Download (recommended)
@@ -27,6 +37,15 @@ Grab the latest build for your platform from the [Releases page](https://github.
 | Linux | `ClipShow-*.flatpak` |
 
 FFmpeg is bundled in the release builds — no extra setup needed.
+
+Each platform has two variants:
+
+| Variant | Size | AI features | Internet needed? |
+|---------|------|-------------|------------------|
+| **Lite** | ~150 MB | Downloads CLIP model (~340 MB) on first use of semantic detection | Yes, on first use |
+| **Full** | ~800 MB | CLIP model bundled, works immediately | No |
+
+Both variants include all core detectors (scene, audio, motion, emotion). The size difference is entirely the bundled CLIP ViT-B/32 ONNX model used for semantic detection. If you don't plan to use text-based semantic search, the lite build is all you need.
 
 ### Install from source
 
@@ -50,7 +69,7 @@ For AI-powered semantic detection (CLIP model, ~340 MB download on first use):
 uv sync --extra semantic
 ```
 
-For face/emotion detection:
+For face/emotion detection (uses ONNX Runtime, downloads a small ~35 KB model on first use):
 
 ```bash
 uv sync --extra emotion
