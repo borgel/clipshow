@@ -1,8 +1,9 @@
 """Semantic content detection via CLIP (ONNX Runtime, no PyTorch).
 
 Lazy-loads onnx_clip on first use. Downloads CLIP ViT-B/32 model (~338MB)
-to ~/.clipshow/models/ on first use. Samples frames at 1 FPS and scores
-against user-configurable text prompts.
+to ~/.clipshow/models/ on first use. Samples frames at 2 FPS and scores
+against user-configurable text prompts, with negative prompt contrast and
+temporal smoothing.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from scipy.ndimage import uniform_filter1d
 
 from clipshow.detection.base import Detector, DetectorResult
 
@@ -21,15 +23,32 @@ DEFAULT_PROMPTS = [
     "beautiful scenery",
     "action scene",
 ]
+DEFAULT_NEGATIVE_PROMPTS = [
+    "boring static shot",
+    "blank wall",
+    "empty room",
+    "black screen",
+]
 MODEL_DIR = Path.home() / ".clipshow" / "models"
-SAMPLE_FPS = 1  # Sample 1 frame per second
+SAMPLE_FPS = 2  # Sample 2 frames per second
+
+# Sigmoid normalization parameters for CLIP cosine similarities.
+# Raw scores are typically 0.15-0.35 for real matches; this sigmoid
+# stretches that range to fill [0, 1] with good contrast.
+_SIGMOID_CENTER = 0.25
+_SIGMOID_SCALE = 20.0
+
+# Temporal smoothing window size in score samples (not seconds).
+# Reduces noise from single-frame outliers.
+_SMOOTH_WINDOW = 5
 
 
 class SemanticDetector(Detector):
     """CLIP-based semantic content scoring.
 
     Uses onnx_clip (ONNX Runtime) to score video frames against text prompts.
-    Returns cosine similarity as score, normalized to [0, 1].
+    Scores positive prompts against negative prompts for better contrast,
+    applies sigmoid normalization, and smooths temporally.
     """
 
     name = "semantic"
@@ -37,9 +56,11 @@ class SemanticDetector(Detector):
     def __init__(
         self,
         prompts: list[str] | None = None,
+        negative_prompts: list[str] | None = None,
         time_step: float = 0.1,
     ):
         self._prompts = prompts or DEFAULT_PROMPTS
+        self._negative_prompts = negative_prompts or DEFAULT_NEGATIVE_PROMPTS
         self._time_step = time_step
         self._model = None
 
@@ -84,7 +105,8 @@ class SemanticDetector(Detector):
         # Encode text prompts once
         from PIL import Image
 
-        text_embeddings = model.get_text_embeddings(self._prompts)
+        pos_embeddings = model.get_text_embeddings(self._prompts)
+        neg_embeddings = model.get_text_embeddings(self._negative_prompts)
 
         frame_idx = 0
         while True:
@@ -102,11 +124,14 @@ class SemanticDetector(Detector):
 
                 image_embeddings = model.get_image_embeddings([img])
 
-                # Cosine similarity against all prompts, take max
-                similarities = image_embeddings @ text_embeddings.T
-                score = float(np.max(similarities))
-                # CLIP similarities are typically in [-1, 1], normalize to [0, 1]
-                score = max(0.0, min(1.0, (score + 1.0) / 2.0))
+                # Positive vs negative contrast: best positive minus best negative
+                pos_sim = float(np.max(image_embeddings @ pos_embeddings.T))
+                neg_sim = float(np.max(image_embeddings @ neg_embeddings.T))
+                raw = pos_sim - neg_sim
+
+                # Sigmoid normalization for better dynamic range
+                score = 1.0 / (1.0 + np.exp(-_SIGMOID_SCALE * (raw - _SIGMOID_CENTER)))
+                score = float(np.clip(score, 0.0, 1.0))
 
                 t = frame_idx / fps
                 idx = min(int(t / self._time_step), num_samples - 1)
@@ -119,7 +144,11 @@ class SemanticDetector(Detector):
 
         cap.release()
 
-        # Normalize to [0, 1]
+        # Temporal smoothing to reduce single-frame noise
+        if len(scores) >= _SMOOTH_WINDOW:
+            scores = uniform_filter1d(scores, size=_SMOOTH_WINDOW)
+
+        # Final normalization to [0, 1]
         max_val = scores.max()
         if max_val > 0:
             scores = scores / max_val
