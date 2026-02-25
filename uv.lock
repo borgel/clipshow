@@ -133,6 +133,7 @@ dependencies = [
     { name = "pyside6" },
     { name = "pyyaml" },
     { name = "scenedetect", extra = ["opencv"] },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -180,6 +181,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.4" },
     { name = "scenedetect", extras = ["opencv"], specifier = ">=0.6.2" },
     { name = "scikit-image", marker = "extra == 'test'", specifier = ">=0.21" },
+    { name = "scipy", specifier = ">=1.11" },
 ]
 provides-extras = ["semantic", "emotion", "audiovisual", "all", "test"]
 
