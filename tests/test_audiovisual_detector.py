@@ -429,7 +429,7 @@ class TestFusionMath:
                 result = detector.detect(static_video)
 
         assert isinstance(result, DetectorResult)
-        assert result.scores.min() >= 0.0
+        assert result.scores.min() >= -1e-10  # allow tiny floating-point rounding
 
 
 # ---------------------------------------------------------------------------

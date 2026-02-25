@@ -6,8 +6,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-# Read version from pyproject.toml
-_pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+# Read version from pyproject.toml (SPECPATH is set by PyInstaller)
+_pyproject = Path(SPECPATH).parent / "pyproject.toml"
 with open(_pyproject, "rb") as f:
     _version = tomllib.load(f)["project"]["version"]
 
