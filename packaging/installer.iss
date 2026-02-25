@@ -1,12 +1,15 @@
 ; Inno Setup script for ClipShow Windows installer
+#ifndef AppVer
+  #define AppVer "0.0.0"
+#endif
 
 [Setup]
 AppName=ClipShow
-AppVersion=0.3.0
+AppVersion={#AppVer}
 AppPublisher=ClipShow Contributors
 DefaultDirName={autopf}\ClipShow
 DefaultGroupName=ClipShow
-OutputBaseFilename=ClipShow-0.3.0-setup
+OutputBaseFilename=ClipShow-{#AppVer}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible

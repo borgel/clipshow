@@ -99,10 +99,18 @@ jobs:
         env:
           CLIPSHOW_BUNDLE_MODELS: ${{ matrix.variant == 'full' && '1' || '0' }}
 
+      - name: Extract version from pyproject.toml
+        id: version
+        shell: bash
+        run: |
+          VER=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+
       - name: Build Inno Setup installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
         with:
           path: packaging/installer.iss
+          options: /DAppVer=${{ steps.version.outputs.ver }}
 
       - name: Rename installer for variant
         shell: bash
