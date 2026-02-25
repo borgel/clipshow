@@ -186,6 +186,67 @@ jobs:
           name: ClipShow-linux
           path: ClipShow-*.flatpak
 
+  smoke-test-linux:
+    needs: [build-linux]
+    if: needs.build-linux.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb
+
+      - name: Add Flathub remote
+        run: |
+          flatpak remote-add --user --if-not-exists \
+            flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install KDE runtime
+        run: |
+          flatpak install --user --noninteractive \
+            flathub org.kde.Platform//6.7
+
+      - name: Download Flatpak artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ClipShow-linux
+          path: artifacts/
+
+      - name: Install ClipShow Flatpak
+        run: |
+          flatpak install --user --noninteractive \
+            artifacts/ClipShow-*.flatpak
+
+      - name: Generate test video
+        run: |
+          sudo apt-get install -y ffmpeg
+          ffmpeg -y -loglevel error \
+            -f lavfi -i "color=c=black:s=320x240:d=1:r=30,format=yuv420p" \
+            -f lavfi -i "color=c=white:s=320x240:d=1:r=30,format=yuv420p" \
+            -f lavfi -i "anullsrc=r=44100:cl=mono" \
+            -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]" \
+            -map "[v]" -map 2:a -t 2 -c:v libx264 -c:a aac -shortest \
+            /tmp/test_input.mp4
+
+      - name: Run smoke test
+        run: |
+          xvfb-run flatpak run com.clipshow.app \
+            --headless --output /tmp/test_output.mp4 /tmp/test_input.mp4
+          echo "Exit code: $?"
+
+      - name: Verify output
+        run: |
+          if [[ ! -f /tmp/test_output.mp4 ]]; then
+            echo "FAIL: Output file not created"
+            exit 1
+          fi
+          SIZE=$(stat -c%s /tmp/test_output.mp4)
+          if [[ ${SIZE} -le 0 ]]; then
+            echo "FAIL: Output file is empty"
+            exit 1
+          fi
+          echo "PASS: Output file exists (${SIZE} bytes)"
+
   create-release:
     needs: [build-macos, build-windows, build-linux]
     if: always() && startsWith(github.ref, 'refs/tags/')
