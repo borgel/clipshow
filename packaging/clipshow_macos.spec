@@ -3,7 +3,13 @@
 
 import os
 import sys
+import tomllib
 from pathlib import Path
+
+# Read version from pyproject.toml
+_pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+with open(_pyproject, "rb") as f:
+    _version = tomllib.load(f)["project"]["version"]
 
 block_cipher = None
 
@@ -42,17 +48,30 @@ semantic_hiddenimports = [
 ]
 
 # Collect onnx_clip model data only for "full" builds
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, copy_metadata
 
 bundle_models = os.environ.get("CLIPSHOW_BUNDLE_MODELS", "0") == "1"
 onnx_clip_datas = collect_data_files("onnx_clip") if bundle_models else []
 onnxruntime_binaries = collect_dynamic_libs("onnxruntime")
 
+# Include pre-downloaded models for "full" builds
+bundled_model_datas = []
+if bundle_models:
+    models_dir = os.path.join(os.path.dirname(os.path.abspath(SPECPATH)), "bundled_models")
+    if os.path.isdir(models_dir):
+        for f in os.listdir(models_dir):
+            bundled_model_datas.append(
+                (os.path.join(models_dir, f), os.path.join("models", f))
+            )
+
+# imageio checks its own version via importlib.metadata at import time
+imageio_metadata = copy_metadata("imageio")
+
 a = Analysis(
     ["../clipshow/__main__.py"],
     pathex=[],
     binaries=[*onnxruntime_binaries],
-    datas=[*onnx_clip_datas],
+    datas=[*onnx_clip_datas, *bundled_model_datas, *imageio_metadata],
     hiddenimports=[
         *scenedetect_hiddenimports,
         *pyside6_hiddenimports,
@@ -115,7 +134,7 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "ClipShow",
         "CFBundleDisplayName": "ClipShow",
-        "CFBundleShortVersionString": "0.3.0",
+        "CFBundleShortVersionString": _version,
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
     },

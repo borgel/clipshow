@@ -74,8 +74,16 @@ class EmotionDetector(Detector):
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self._face_cascade = cv2.CascadeClassifier(cascade_path)
 
-        # Download emotion-ferplus ONNX model if needed (atomic to avoid races)
-        model_path = MODEL_DIR / MODEL_FILENAME
+        # Check for bundled model (PyInstaller builds) first, then user cache
+        import sys
+
+        bundled_path = Path(getattr(sys, "_MEIPASS", "")) / "models" / MODEL_FILENAME
+        if bundled_path.exists():
+            model_path = bundled_path
+        else:
+            model_path = MODEL_DIR / MODEL_FILENAME
+
+        # Download if not found in either location (atomic to avoid races)
         if not model_path.exists():
             logger.info("Downloading emotion-ferplus model to %s", model_path)
             MODEL_DIR.mkdir(parents=True, exist_ok=True)

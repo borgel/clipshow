@@ -40,6 +40,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
 
+      - name: Download models for full build
+        if: matrix.variant == 'full'
+        run: |
+          python packaging/download_models.py
+
       - name: Build macOS app bundle
         run: pyinstaller packaging/clipshow_macos.spec --noconfirm
         env:
@@ -93,6 +98,12 @@ jobs:
         run: pytest tests/ -v -m "not uses_audio_fixture"
         env:
           QT_QPA_PLATFORM: offscreen
+
+      - name: Download models for full build
+        if: matrix.variant == 'full'
+        shell: bash
+        run: |
+          python packaging/download_models.py
 
       - name: Build Windows executable
         run: pyinstaller packaging/clipshow_windows.spec --noconfirm
