@@ -146,9 +146,11 @@ jobs:
 
       - name: Bundle Flatpak
         run: |
+          REF_SLUG="${{ github.ref_name }}"
+          REF_SLUG="${REF_SLUG//\//-}"
           flatpak build-bundle \
             repo \
-            "ClipShow-${{ github.ref_name }}-linux.flatpak" \
+            "ClipShow-${REF_SLUG}-linux.flatpak" \
             com.clipshow.app
 
       - name: Upload Linux artifact
