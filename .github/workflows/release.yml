@@ -220,27 +220,30 @@ jobs:
       - name: Generate test video
         run: |
           sudo apt-get install -y ffmpeg
+          mkdir -p ~/clipshow-smoke-test
           ffmpeg -y -loglevel error \
             -f lavfi -i "color=c=black:s=320x240:d=1:r=30,format=yuv420p" \
             -f lavfi -i "color=c=white:s=320x240:d=1:r=30,format=yuv420p" \
             -f lavfi -i "anullsrc=r=44100:cl=mono" \
             -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]" \
             -map "[v]" -map 2:a -t 2 -c:v libx264 -c:a aac -shortest \
-            /tmp/test_input.mp4
+            ~/clipshow-smoke-test/test_input.mp4
 
       - name: Run smoke test
         run: |
           xvfb-run flatpak run com.clipshow.app \
-            --headless --output /tmp/test_output.mp4 /tmp/test_input.mp4
+            --headless \
+            --output ~/clipshow-smoke-test/test_output.mp4 \
+            ~/clipshow-smoke-test/test_input.mp4
           echo "Exit code: $?"
 
       - name: Verify output
         run: |
-          if [[ ! -f /tmp/test_output.mp4 ]]; then
+          if [[ ! -f ~/clipshow-smoke-test/test_output.mp4 ]]; then
             echo "FAIL: Output file not created"
             exit 1
           fi
-          SIZE=$(stat -c%s /tmp/test_output.mp4)
+          SIZE=$(stat -c%s ~/clipshow-smoke-test/test_output.mp4)
           if [[ ${SIZE} -le 0 ]]; then
             echo "FAIL: Output file is empty"
             exit 1
