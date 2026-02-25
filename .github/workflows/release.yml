@@ -13,6 +13,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         variant: [lite, full]
     steps:
@@ -23,13 +24,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install FFmpeg
         run: brew install ffmpeg
 
       - name: Install dependencies
         run: |
-          pip install -e ".[all,test]"
-          pip install pyinstaller
+          uv pip install --system -e ".[all,test]"
+          uv pip install --system pyinstaller
 
       - name: Run tests
         run: pytest tests/ -v -m "not uses_audio_fixture"
@@ -63,6 +67,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         variant: [lite, full]
     steps:
@@ -73,13 +78,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install FFmpeg
         run: choco install ffmpeg -y
 
       - name: Install dependencies
         run: |
-          pip install -e ".[all,test]"
-          pip install pyinstaller
+          uv pip install --system -e ".[all,test]"
+          uv pip install --system pyinstaller
 
       - name: Run tests
         run: pytest tests/ -v -m "not uses_audio_fixture"
