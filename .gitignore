@@ -38,3 +38,6 @@ htmlcov/
 
 # Models (downloaded on first use)
 models/
+
+# Static ffmpeg binaries (downloaded during Flatpak build)
+ffmpeg-bin/

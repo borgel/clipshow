@@ -165,6 +165,17 @@ jobs:
           uv export --frozen --no-hashes --no-dev --all-extras \
             | grep -v "^-e " > requirements-flatpak.txt
 
+      - name: Download static ffmpeg for Flatpak
+        run: |
+          FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz"
+          curl -sL "${FFMPEG_URL}" -o /tmp/ffmpeg.tar.xz
+          tar xJf /tmp/ffmpeg.tar.xz -C /tmp
+          mkdir -p ffmpeg-bin
+          cp /tmp/ffmpeg-n7.1-latest-linux64-gpl-7.1/bin/ffmpeg ffmpeg-bin/
+          cp /tmp/ffmpeg-n7.1-latest-linux64-gpl-7.1/bin/ffprobe ffmpeg-bin/
+          chmod +x ffmpeg-bin/ffmpeg ffmpeg-bin/ffprobe
+          echo "Bundled ffmpeg: $(ffmpeg-bin/ffmpeg -version | head -1)"
+
       - name: Build Flatpak
         run: |
           flatpak-builder --user --force-clean \
