@@ -245,7 +245,8 @@ jobs:
           xvfb-run flatpak run com.clipshow.app \
             --headless \
             --output ~/clipshow-smoke-test/test_output.mp4 \
-            ~/clipshow-smoke-test/test_input.mp4
+            ~/clipshow-smoke-test/test_input.mp4 \
+            2>~/clipshow-smoke-test/stderr.log
           echo "Exit code: $?"
 
       - name: Verify output
@@ -260,6 +261,15 @@ jobs:
             exit 1
           fi
           echo "PASS: Output file exists (${SIZE} bytes)"
+
+      - name: Check for errors in stderr
+        run: |
+          if grep -qi "error\|traceback\|exception" ~/clipshow-smoke-test/stderr.log 2>/dev/null; then
+            echo "FAIL: Errors found in stderr:"
+            grep -i "error\|traceback\|exception" ~/clipshow-smoke-test/stderr.log | head -10
+            exit 1
+          fi
+          echo "PASS: No errors in stderr"
 
   create-release:
     needs: [build-macos, build-windows, build-linux]

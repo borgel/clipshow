@@ -45,6 +45,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 bundle_models = os.environ.get("CLIPSHOW_BUNDLE_MODELS", "0") == "1"
 onnx_clip_datas = collect_data_files("onnx_clip") if bundle_models else []
 onnxruntime_binaries = collect_dynamic_libs("onnxruntime")
+cv2_datas = collect_data_files("cv2", includes=["**/*.xml"])
 
 # Include pre-downloaded models for "full" builds
 bundled_model_datas = []
@@ -63,7 +64,7 @@ a = Analysis(
     ["../clipshow/__main__.py"],
     pathex=[],
     binaries=[*onnxruntime_binaries],
-    datas=[*onnx_clip_datas, *bundled_model_datas, *imageio_metadata],
+    datas=[*onnx_clip_datas, *bundled_model_datas, *imageio_metadata, *cv2_datas],
     hiddenimports=[
         *scenedetect_hiddenimports,
         *pyside6_hiddenimports,

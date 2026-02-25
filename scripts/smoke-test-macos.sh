@@ -88,9 +88,10 @@ if [[ ! -x "${CLIPSHOW_BIN}" ]]; then
     exit 1
 fi
 
+STDERR_LOG="${WORKDIR}/stderr.log"
 set +e
 QT_QPA_PLATFORM=offscreen "${CLIPSHOW_BIN}" \
-    --headless --output "${TEST_OUTPUT}" "${TEST_VIDEO}" 2>&1
+    --headless --output "${TEST_OUTPUT}" "${TEST_VIDEO}" 2>"${STDERR_LOG}"
 EXIT_CODE=$?
 set -e
 
@@ -98,6 +99,17 @@ if [[ ${EXIT_CODE} -eq 0 ]]; then
     pass "ClipShow exited with code 0"
 else
     fail "ClipShow exited with code ${EXIT_CODE}"
+    cat "${STDERR_LOG}" | head -20
+fi
+
+# Check stderr for ERROR lines (OpenCV, onnxruntime, Python tracebacks, etc.)
+if grep -qi "error\|traceback\|exception" "${STDERR_LOG}" 2>/dev/null; then
+    fail "Errors found in stderr:"
+    grep -i "error\|traceback\|exception" "${STDERR_LOG}" | head -10 | while read -r line; do
+        log "  ${line}"
+    done
+else
+    pass "No errors in stderr"
 fi
 
 # --- Step 5: Verify output ---
