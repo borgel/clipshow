@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -73,12 +74,25 @@ class EmotionDetector(Detector):
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self._face_cascade = cv2.CascadeClassifier(cascade_path)
 
-        # Download emotion-ferplus ONNX model if needed
+        # Download emotion-ferplus ONNX model if needed (atomic to avoid races)
         model_path = MODEL_DIR / MODEL_FILENAME
         if not model_path.exists():
             logger.info("Downloading emotion-ferplus model to %s", model_path)
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(MODEL_URL, model_path)
+            fd, tmp_path = tempfile.mkstemp(dir=MODEL_DIR, suffix=".tmp")
+            try:
+                import os
+
+                os.close(fd)
+                urllib.request.urlretrieve(MODEL_URL, tmp_path)
+                os.replace(tmp_path, model_path)
+            except BaseException:
+                # Clean up partial download on any failure
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
 
         self._emotion_session = ort.InferenceSession(
             str(model_path),

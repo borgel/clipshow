@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 from dataclasses import asdict
 
 import numpy as np
@@ -18,6 +19,8 @@ from clipshow.detection.scoring import (
     weighted_combine,
 )
 from clipshow.model.moments import DetectedMoment
+
+logger = logging.getLogger(__name__)
 
 DETECTOR_CLASSES: dict[str, type[Detector]] = {
     "scene": SceneDetector,
@@ -131,8 +134,8 @@ class DetectionPipeline:
                     progress_callback=per_detector_progress,
                     cancel_flag=cancel_flag,
                 )
-            except RuntimeError as exc:
-                # Optional detector failed to load (missing dependency) — skip
+            except Exception as exc:
+                # Optional detector failed (missing dep, model load error, etc.) — skip
                 if warning_callback:
                     warning_callback(f"{name.title()} detector skipped: {exc}")
                 continue
@@ -267,7 +270,15 @@ class DetectionPipeline:
                         f.cancel()
                     break
 
-                moments = future.result()
+                try:
+                    moments = future.result()
+                except Exception as exc:
+                    path = future_to_path[future]
+                    logger.warning("Analysis failed for %s: %s", path, exc)
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed / total)
+                    continue
                 all_moments.extend(moments)
                 completed += 1
 
