@@ -87,6 +87,7 @@ class PromptEditor(QWidget):
         self.line_edit = QLineEdit()
         self.line_edit.setPlaceholderText("New prompt\u2026")
         self.add_button = QPushButton("Add")
+        self.add_button.setAutoDefault(False)
         add_row.addWidget(self.line_edit)
         add_row.addWidget(self.add_button)
         layout.addLayout(add_row)
@@ -94,8 +95,10 @@ class PromptEditor(QWidget):
         # Action buttons
         btn_row = QHBoxLayout()
         self.remove_button = QPushButton("Remove")
+        self.remove_button.setAutoDefault(False)
         self.remove_button.setEnabled(False)
         self.reset_button = QPushButton("Reset to Defaults")
+        self.reset_button.setAutoDefault(False)
         btn_row.addWidget(self.remove_button)
         btn_row.addStretch()
         btn_row.addWidget(self.reset_button)
@@ -153,12 +156,10 @@ class PromptEditor(QWidget):
         self.list_widget.clear()
         for i, prompt in enumerate(self._prompts):
             item = QListWidgetItem()
-            item.setSizeHint(item.sizeHint().expandedTo(
-                self.list_widget.sizeHint()
-            ))
             self.list_widget.addItem(item)
             row_widget = _PromptRow(i, prompt)
             row_widget.remove_clicked.connect(self._remove_at)
+            item.setSizeHint(row_widget.sizeHint())
             self.list_widget.setItemWidget(item, row_widget)
 
     @property

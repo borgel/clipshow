@@ -362,6 +362,17 @@ class AnalyzePanel(QWidget):
         dlg = QDialog(self)
         dlg.setWindowTitle("Edit Semantic Prompts")
         dlg.setMinimumSize(600, 400)
+        # Prevent Enter/Return from closing the dialog (QLineEdit ignores
+        # the key event after emitting returnPressed, so it propagates up
+        # to QDialog.keyPressEvent which calls accept by default).
+        orig_key_press = QDialog.keyPressEvent
+
+        def _key_press(event):
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                return
+            orig_key_press(dlg, event)
+
+        dlg.keyPressEvent = _key_press
         layout = QVBoxLayout(dlg)
 
         # Two editors side by side
@@ -397,6 +408,7 @@ class AnalyzePanel(QWidget):
         # Prevent Enter in the prompt text fields from closing the dialog
         for btn in buttons.buttons():
             btn.setAutoDefault(False)
+            btn.setDefault(False)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
         btn_row.addWidget(buttons)
