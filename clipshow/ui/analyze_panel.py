@@ -394,6 +394,9 @@ class AnalyzePanel(QWidget):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        # Prevent Enter in the prompt text fields from closing the dialog
+        for btn in buttons.buttons():
+            btn.setAutoDefault(False)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
         btn_row.addWidget(buttons)

@@ -76,28 +76,23 @@ class TestReset:
         assert editor.prompts == DEFAULT_PROMPTS
 
 
-class TestInlineEdit:
-    def test_inline_edit_updates_prompt(self, editor, qtbot):
+class TestPerRowRemove:
+    def test_row_remove_button_removes_prompt(self, editor, qtbot):
+        original_count = len(editor.prompts)
+        removed = editor.prompts[0]
+        # Get the row widget and click its remove button
         item = editor.list_widget.item(0)
-        old_text = item.text()
+        row_widget = editor.list_widget.itemWidget(item)
         with qtbot.waitSignal(editor.prompts_changed, timeout=1000):
-            item.setText("edited prompt")
-        assert editor.prompts[0] == "edited prompt"
-        assert old_text not in editor.prompts
+            row_widget.remove_clicked.emit(0)
+        assert removed not in editor.prompts
+        assert len(editor.prompts) == original_count - 1
 
-    def test_inline_edit_empty_reverts(self, editor):
-        item = editor.list_widget.item(0)
-        original = item.text()
-        item.setText("")
-        # Should revert to original
-        assert editor.prompts[0] == original
-
-    def test_inline_edit_duplicate_reverts(self, editor):
-        item = editor.list_widget.item(0)
-        original = item.text()
-        # Try to set it to the same text as another prompt
-        item.setText(DEFAULT_PROMPTS[1])
-        assert editor.prompts[0] == original
+    def test_each_row_has_remove_widget(self, editor):
+        for i in range(editor.list_widget.count()):
+            item = editor.list_widget.item(i)
+            widget = editor.list_widget.itemWidget(item)
+            assert widget is not None
 
 
 class TestClearAll:
@@ -112,6 +107,13 @@ class TestClearAll:
         qtbot.addWidget(w)
         w.clear_all()
         assert w.prompts == []
+
+    def test_empty_prompts_not_replaced_by_defaults(self, qtbot):
+        """Empty list should stay empty, not revert to defaults."""
+        w = PromptEditor(prompts=[], default_prompts=["alpha", "beta"])
+        qtbot.addWidget(w)
+        assert w.prompts == []
+        assert w.list_widget.count() == 0
 
 
 class TestCustomDefaults:

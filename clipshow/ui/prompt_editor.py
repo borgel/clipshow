@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -27,11 +29,31 @@ DEFAULT_NEGATIVE_PROMPTS = [
 ]
 
 
+class _PromptRow(QWidget):
+    """Single row in the prompt list: text label + remove button."""
+
+    remove_clicked = Signal(int)
+
+    def __init__(self, index: int, text: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 1, 4, 1)
+        label = QLabel(text)
+        label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        remove_btn = QPushButton("\u00d7")  # multiplication sign as "x"
+        remove_btn.setFixedSize(20, 20)
+        remove_btn.setToolTip("Remove this prompt")
+        remove_btn.setStyleSheet("QPushButton { border: none; font-weight: bold; }")
+        remove_btn.clicked.connect(lambda: self.remove_clicked.emit(index))
+        layout.addWidget(label, stretch=1)
+        layout.addWidget(remove_btn)
+
+
 class PromptEditor(QWidget):
     """Editable list of semantic text prompts.
 
     Emits ``prompts_changed`` whenever the list is modified (add, remove,
-    inline edit, or reset).
+    or reset).
     """
 
     prompts_changed = Signal(list)
@@ -44,7 +66,9 @@ class PromptEditor(QWidget):
     ):
         super().__init__(parent)
         self._default_prompts = list(default_prompts or DEFAULT_PROMPTS)
-        self._prompts: list[str] = list(prompts or self._default_prompts)
+        self._prompts: list[str] = list(
+            prompts if prompts is not None else self._default_prompts
+        )
         self._setup_ui()
         self._connect_signals()
         self._refresh_list()
@@ -61,7 +85,7 @@ class PromptEditor(QWidget):
         # Add row
         add_row = QHBoxLayout()
         self.line_edit = QLineEdit()
-        self.line_edit.setPlaceholderText("New prompt…")
+        self.line_edit.setPlaceholderText("New prompt\u2026")
         self.add_button = QPushButton("Add")
         add_row.addWidget(self.line_edit)
         add_row.addWidget(self.add_button)
@@ -83,7 +107,6 @@ class PromptEditor(QWidget):
         self.remove_button.clicked.connect(self._on_remove)
         self.reset_button.clicked.connect(self._on_reset)
         self.list_widget.currentRowChanged.connect(self._on_selection_changed)
-        self.list_widget.itemChanged.connect(self._on_item_edited)
 
     # ── Slots ─────────────────────────────────────────────────────────
 
@@ -101,7 +124,12 @@ class PromptEditor(QWidget):
     def _on_remove(self) -> None:
         row = self.list_widget.currentRow()
         if 0 <= row < len(self._prompts):
-            self._prompts.pop(row)
+            self._remove_at(row)
+
+    def _remove_at(self, index: int) -> None:
+        """Remove the prompt at the given index."""
+        if 0 <= index < len(self._prompts):
+            self._prompts.pop(index)
             self._refresh_list()
             self.prompts_changed.emit(list(self._prompts))
 
@@ -119,31 +147,19 @@ class PromptEditor(QWidget):
     def _on_selection_changed(self, row: int) -> None:
         self.remove_button.setEnabled(row >= 0)
 
-    def _on_item_edited(self, item: QListWidgetItem) -> None:
-        row = self.list_widget.row(item)
-        new_text = item.text().strip()
-
-        # Reject empty or duplicate edits
-        if not new_text or (new_text != self._prompts[row] and new_text in self._prompts):
-            self.list_widget.blockSignals(True)
-            item.setText(self._prompts[row])
-            self.list_widget.blockSignals(False)
-            return
-
-        if new_text != self._prompts[row]:
-            self._prompts[row] = new_text
-            self.prompts_changed.emit(list(self._prompts))
-
     # ── Helpers ───────────────────────────────────────────────────────
 
     def _refresh_list(self) -> None:
-        self.list_widget.blockSignals(True)
         self.list_widget.clear()
-        for prompt in self._prompts:
-            item = QListWidgetItem(prompt)
-            item.setFlags(item.flags() | item.flags().ItemIsEditable)
+        for i, prompt in enumerate(self._prompts):
+            item = QListWidgetItem()
+            item.setSizeHint(item.sizeHint().expandedTo(
+                self.list_widget.sizeHint()
+            ))
             self.list_widget.addItem(item)
-        self.list_widget.blockSignals(False)
+            row_widget = _PromptRow(i, prompt)
+            row_widget.remove_clicked.connect(self._remove_at)
+            self.list_widget.setItemWidget(item, row_widget)
 
     @property
     def prompts(self) -> list[str]:

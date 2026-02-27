@@ -36,6 +36,9 @@ class SceneDetector(Detector):
 
         scene_manager.detect_scenes(video=video, show_progress=False)
 
+        if progress_callback:
+            progress_callback(0.5)  # Scene analysis done, score extraction next
+
         fps = video.frame_rate
         frame_count = video.duration.get_frames()
 

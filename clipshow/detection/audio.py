@@ -63,6 +63,9 @@ class AudioDetector(Detector):
     ) -> DetectorResult:
         import librosa
 
+        if progress_callback:
+            progress_callback(0.1)
+
         wav_path = self._extract_audio(video_path)
         if wav_path is None:
             # No audio track — return empty scores
@@ -72,6 +75,9 @@ class AudioDetector(Detector):
                 time_step=self._time_step,
                 source_path=video_path,
             )
+
+        if progress_callback:
+            progress_callback(0.3)
 
         try:
             y, sr = librosa.load(wav_path, sr=self._sr, mono=True)
@@ -86,12 +92,18 @@ class AudioDetector(Detector):
                 source_path=video_path,
             )
 
+        if progress_callback:
+            progress_callback(0.5)
+
         duration = len(y) / sr
         num_samples = max(1, int(np.ceil(duration / self._time_step)))
 
         # Onset strength (captures transients, beats, speech onsets)
         hop_length = int(sr * self._time_step)
         onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
+
+        if progress_callback:
+            progress_callback(0.7)
 
         # RMS energy
         rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
