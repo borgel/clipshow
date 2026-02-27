@@ -300,6 +300,8 @@ class AnalyzePanel(QWidget):
 
     _DETECTOR_NAMES = ("scene", "audio", "motion", "semantic", "emotion")
 
+    _DEFAULT_WEIGHT = SLIDER_SCALE // 2  # 50% when checkbox toggled on
+
     def _on_check_toggled(self, detector: str, enabled: bool) -> None:
         slider = getattr(self, f"{detector}_slider")
         if self.auto_balance_check.isChecked():
@@ -310,7 +312,9 @@ class AnalyzePanel(QWidget):
             self._rebalance_weights()
         else:
             slider.setEnabled(enabled)
-            if not enabled:
+            if enabled and slider.value() == 0:
+                slider.setValue(self._DEFAULT_WEIGHT)
+            elif not enabled:
                 slider.setValue(0)
 
     def _on_auto_balance_toggled(self, enabled: bool) -> None:
