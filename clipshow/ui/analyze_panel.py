@@ -512,9 +512,10 @@ class AnalyzePanel(QWidget):
         rate_str = ""
         eta_str = ""
         if elapsed > 1.0 and overall > 0.01:
-            processed_duration = self._total_video_duration * overall
-            rate = processed_duration / elapsed
-            rate_str = f"{rate:.1f}x realtime"
+            if self._total_video_duration > 0:
+                processed_duration = self._total_video_duration * overall
+                rate = processed_duration / elapsed
+                rate_str = f"{rate:.1f}x realtime"
             eta = elapsed * (1 - overall) / overall
             eta_str = self._format_eta(eta)
 

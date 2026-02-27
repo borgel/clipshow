@@ -164,7 +164,7 @@ def extract_moments(
     if len(scores) == 0:
         return []
 
-    if video_duration is None:
+    if not video_duration or video_duration <= 0:
         video_duration = len(scores) * COMMON_TIME_STEP
 
     # 1. Threshold to find candidate index ranges

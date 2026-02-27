@@ -77,16 +77,41 @@ def extract_metadata(video_path: str) -> VideoSource:
     except (ValueError, ZeroDivisionError):
         pass
 
-    # Duration: prefer format duration, fall back to stream duration
+    # Duration: try multiple sources — some containers omit format/stream duration
     duration = 0.0
     for source in [fmt, stream]:
         raw = source.get("duration")
         if raw is not None:
             try:
                 duration = float(raw)
-                break
+                if duration > 0:
+                    break
             except (ValueError, TypeError):
                 pass
+
+    # Fallback: compute from nb_frames / fps
+    if duration <= 0 and fps > 0:
+        nb_frames = stream.get("nb_frames")
+        if nb_frames is not None:
+            try:
+                duration = int(nb_frames) / fps
+            except (ValueError, TypeError):
+                pass
+
+    # Fallback: tags.DURATION (common in MKV/MTS containers, format "HH:MM:SS.microseconds")
+    if duration <= 0:
+        for source in [stream, fmt]:
+            tag_dur = source.get("tags", {}).get("DURATION")
+            if tag_dur:
+                try:
+                    parts = tag_dur.split(":")
+                    duration = (
+                        float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+                    )
+                    if duration > 0:
+                        break
+                except (ValueError, IndexError):
+                    pass
 
     return VideoSource(
         path=video_path,
