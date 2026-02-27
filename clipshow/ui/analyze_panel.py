@@ -530,8 +530,10 @@ class AnalyzePanel(QWidget):
             desc = f"Analyzing {active} of {self._total_files} clips"
 
         parts = [desc]
-        if rate_str:
+        if rate_str and eta_str:
             parts.append(f"\u2014 {rate_str}, {eta_str}")
+        elif eta_str:
+            parts.append(f"\u2014 {eta_str}")
         self.status_label.setText(" ".join(parts))
 
     def _on_file_complete(self, source_path: str) -> None:

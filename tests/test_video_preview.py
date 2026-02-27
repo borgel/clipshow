@@ -113,12 +113,16 @@ class TestSegmentPlayback:
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
         preview.play_segment(fake_video, 1000, 5000)
+        # Position is deferred until media loads
+        preview._on_media_status_changed(QMediaPlayer.MediaStatus.LoadedMedia)
         preview.player.setPosition.assert_called_with(1000)
 
     def test_play_segment_starts_playback(self, preview, fake_video):
         preview.player.play = MagicMock()
         preview.player.setPosition = MagicMock()
         preview.play_segment(fake_video, 1000, 5000)
+        # Playback is deferred until media loads
+        preview._on_media_status_changed(QMediaPlayer.MediaStatus.LoadedMedia)
         preview.player.play.assert_called_once()
 
     def test_play_segment_missing_file_skips(self, preview):

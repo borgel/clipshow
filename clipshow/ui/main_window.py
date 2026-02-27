@@ -100,6 +100,11 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentIndex(next_idx)
 
     def _on_tab_changed(self, index: int) -> None:
+        # Pause video preview when leaving the Review tab
+        review_index = self.tabs.indexOf(self.review_panel)
+        if index != review_index and self.review_panel.video_preview.is_playing:
+            self.review_panel.video_preview.pause()
+
         self.back_button.setEnabled(index > 0)
         if index == self.tabs.count() - 1:
             self.next_button.setEnabled(False)

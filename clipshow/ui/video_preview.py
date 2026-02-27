@@ -21,6 +21,7 @@ class VideoPreview(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._segment_end: float | None = None
+        self._pending_start_ms: int | None = None
         self._setup_ui()
         self._connect_signals()
 
@@ -53,7 +54,16 @@ class VideoPreview(QWidget):
         self.pause_button.clicked.connect(self.pause)
         self.player.playbackStateChanged.connect(self._on_state_changed)
         self.player.positionChanged.connect(self._check_segment_end)
+        self.player.mediaStatusChanged.connect(self._on_media_status_changed)
         self.player.errorOccurred.connect(self._on_error)
+
+    def _on_media_status_changed(self, status: QMediaPlayer.MediaStatus) -> None:
+        """Seek and play once media is loaded."""
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            if self._pending_start_ms is not None:
+                self.player.setPosition(self._pending_start_ms)
+                self._pending_start_ms = None
+                self.player.play()
 
     def _on_error(self, error: QMediaPlayer.Error, message: str) -> None:
         """Handle media player errors gracefully instead of crashing."""
@@ -90,9 +100,10 @@ class VideoPreview(QWidget):
             logger.warning("Cannot play — file not found: %s", path)
             return
         self._segment_end = end_ms
+        self._pending_start_ms = start_ms
         self.player.setSource(QUrl.fromLocalFile(path))
-        self.player.setPosition(start_ms)
-        self.player.play()
+        # Position and play are deferred to _on_media_status_changed
+        # because setPosition doesn't work until media is loaded.
 
     @Slot()
     def play(self) -> None:
